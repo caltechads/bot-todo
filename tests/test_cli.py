@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import re
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
+from unittest import mock
 
-from tests.support import TodoCliTestCase, invoke
+from bot_todo.config import CONFIG_ENV_VAR
+from tests.support import CliResult, TodoCliTestCase, invoke
 
 
 class InitializationAndIdentityTests(TodoCliTestCase):
@@ -728,6 +732,359 @@ class ConfiguredSelectionTests(TodoCliTestCase):
         self.assertEqual(
             json.loads(result.stderr)["error"]["code"], "repository_not_found"
         )
+
+
+class AggregateTestCase(unittest.TestCase):
+    """Build an ordered two-repository collection for the --all selector."""
+
+    def setUp(self) -> None:
+        """
+        Initialize the repositories alpha and beta and configure them in order.
+
+        Side Effects:
+            Creates a temporary directory holding both repositories and the
+            configuration file naming them.
+        """
+        self._temporary_directory = tempfile.TemporaryDirectory()
+        self.directory = Path(self._temporary_directory.name).resolve()
+        for name in ("alpha", "beta"):
+            (self.directory / name).mkdir()
+            self.run_in(name, "init", "--name", name)
+        self.config = self.directory / "config.toml"
+        self.write_config("alpha", "beta")
+
+    def tearDown(self) -> None:
+        """
+        Remove both repositories and the configuration.
+
+        Side Effects:
+            Deletes the temporary directory and its contents.
+        """
+        self._temporary_directory.cleanup()
+
+    def write_config(self, *names: str) -> None:
+        """
+        Rewrite the configuration over the named repositories, in order.
+
+        Side Effects:
+            Overwrites the configuration file.
+
+        Args:
+            *names: Directory names to configure, which need not exist.
+        """
+        entries = "".join(
+            f'\n[[repositories]]\nname = "{name}"\npath = "{self.directory / name}"\n'
+            for name in names
+        )
+        self.config.write_text(f"schema_version = 1\n{entries}", encoding="utf-8")
+
+    def run_in(self, repo: str, *arguments: str) -> CliResult:
+        """
+        Run one command against a single repository by path.
+
+        Side Effects:
+            May update that repository's canonical task file.
+
+        Args:
+            repo: Directory name of the repository.
+            *arguments: Command and command-specific arguments.
+
+        Returns:
+            Captured exit status and output.
+        """
+        result = invoke("--root", str(self.directory / repo), *arguments)
+        if result.returncode != 0:
+            raise AssertionError(f"setup failed ({result.returncode}): {result.stderr}")
+        return result
+
+    def add(self, repo: str, title: str, priority: str, *extra: str) -> str:
+        """
+        Add one simple chore to a repository and return its allocated ID.
+
+        Side Effects:
+            Updates that repository's canonical task file.
+
+        Args:
+            repo: Directory name of the repository.
+            title: Task title.
+            priority: Priority section for the task.
+            *extra: Additional options for the add command.
+
+        Returns:
+            The allocated task ID.
+        """
+        result = self.run_in(
+            repo,
+            "add",
+            title,
+            "--priority",
+            priority,
+            "--type",
+            "chore",
+            "--simple",
+            *extra,
+        )
+        return result.stdout.strip()
+
+    def aggregate(self, *arguments: str) -> CliResult:
+        """
+        Run one aggregate query in human mode.
+
+        Side Effects:
+            Reads every configured repository.
+
+        Args:
+            *arguments: Command and command-specific arguments.
+
+        Returns:
+            Captured exit status and output.
+        """
+        return invoke("--config", str(self.config), "--all", *arguments)
+
+    def aggregate_json(self, *arguments: str) -> dict[str, Any]:
+        """
+        Run one successful aggregate query and parse its data object.
+
+        Side Effects:
+            Reads every configured repository.
+
+        Args:
+            *arguments: Command and command-specific arguments.
+
+        Returns:
+            The parsed ``data`` object.
+        """
+        result = invoke("--json", "--config", str(self.config), "--all", *arguments)
+        if result.returncode != 0:
+            raise AssertionError(f"query failed ({result.returncode}): {result.stderr}")
+        data: dict[str, Any] = json.loads(result.stdout)["data"]
+        return data
+
+    def provenance(self, tasks: list[dict[str, Any]]) -> list[tuple[str, str]]:
+        """
+        Reduce tasks to their Repository Name and task ID, in order.
+
+        Args:
+            tasks: JSON Task objects.
+
+        Returns:
+            One name and ID pair per task.
+        """
+        return [(task["repository"]["name"], task["id"]) for task in tasks]
+
+
+class AggregateQueryTests(AggregateTestCase):
+    """Cover --all ordering, provenance, and the two singular queries."""
+
+    def test_list_orders_by_priority_then_collection_then_file(self) -> None:
+        self.add("alpha", "alpha late", "P2")
+        self.add("alpha", "alpha first", "P0")
+        self.add("beta", "beta first", "P0")
+        self.add("beta", "beta second", "P0")
+        self.add("beta", "beta middle", "P1")
+
+        tasks = self.aggregate_json("list")["tasks"]
+
+        self.assertEqual(
+            self.provenance(tasks),
+            [
+                ("alpha", "T002"),
+                ("beta", "T001"),
+                ("beta", "T002"),
+                ("beta", "T003"),
+                ("alpha", "T001"),
+            ],
+        )
+
+    def test_every_task_carries_its_own_repository_provenance(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+        self.add("beta", "beta work", "P0")
+
+        tasks = self.aggregate_json("list")["tasks"]
+
+        self.assertEqual(
+            [task["repository"] for task in tasks],
+            [
+                {"name": "alpha", "path": str(self.directory / "alpha")},
+                {"name": "beta", "path": str(self.directory / "beta")},
+            ],
+        )
+
+    def test_human_rows_name_their_repository(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+        self.add("beta", "beta work", "P1")
+
+        result = self.aggregate("list")
+
+        self.assertEqual(
+            result.stdout.splitlines(),
+            ["alpha T001 P0 alpha work", "beta T001 P1 beta work"],
+        )
+
+    def test_a_single_repository_row_keeps_no_provenance_prefix(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+
+        result = invoke("--config", str(self.config), "--repo", "alpha", "list")
+
+        self.assertEqual(result.stdout.splitlines(), ["T001 P0 alpha work"])
+
+    def test_critical_returns_a_claimed_task_that_actionable_skips(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+        self.add("beta", "beta work", "P0")
+        self.run_in("alpha", "claim", "T001", "--actor", "someone")
+
+        critical = self.aggregate_json("critical")["task"]
+        actionable = self.aggregate_json("actionable")["task"]
+
+        self.assertEqual(self.provenance([critical]), [("alpha", "T001")])
+        self.assertEqual(self.provenance([actionable]), [("beta", "T001")])
+
+    def test_a_cancelled_blocker_still_blocks_across_the_collection(self) -> None:
+        blocker = self.add("alpha", "alpha blocker", "P1")
+        self.add("alpha", "alpha blocked", "P0", "--blocked-by", blocker)
+        self.add("beta", "beta work", "P0")
+        self.run_in("alpha", "cancel", blocker, "--reason", "obsolete")
+
+        actionable = self.aggregate_json("actionable")["task"]
+
+        self.assertEqual(self.provenance([actionable]), [("beta", "T001")])
+
+    def test_empty_singular_queries_still_succeed(self) -> None:
+        critical = self.aggregate_json("critical")
+        result = self.aggregate("actionable")
+
+        self.assertEqual(critical, {"task": None})
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "no actionable task")
+
+    def test_an_empty_collection_succeeds_with_no_tasks(self) -> None:
+        environment = {"XDG_CONFIG_HOME": str(self.directory / "absent")}
+
+        with mock.patch.dict(os.environ, environment, clear=False):
+            os.environ.pop(CONFIG_ENV_VAR, None)
+            listed = invoke("--json", "--all", "list")
+            critical = invoke("--json", "--all", "critical")
+            human = invoke("--all", "list")
+
+        self.assertEqual(json.loads(listed.stdout)["data"], {"tasks": []})
+        self.assertEqual(json.loads(critical.stdout)["data"], {"task": None})
+        self.assertEqual((human.returncode, human.stdout), (0, ""))
+
+
+class AggregateFailureTests(AggregateTestCase):
+    """Cover strict aggregate partial failure and its exit status."""
+
+    def test_one_failed_repository_fails_the_whole_query(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+        self.write_config("alpha", "gone")
+
+        result = invoke("--json", "--config", str(self.config), "--all", "list")
+        failures = json.loads(result.stderr)["error"]["failures"]
+
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(
+            json.loads(result.stderr)["error"]["code"], "aggregate_partial_failure"
+        )
+        self.assertEqual(
+            [(one["name"], one["path"], one["code"]) for one in failures],
+            [("gone", str(self.directory / "gone"), "repository_not_found")],
+        )
+        self.assertTrue(failures[0]["message"])
+
+    def test_every_failure_is_listed_in_configuration_order(self) -> None:
+        (self.directory / "bare").mkdir()
+        self.write_config("gone", "alpha", "bare")
+
+        result = invoke("--json", "--config", str(self.config), "--all", "critical")
+        failures = json.loads(result.stderr)["error"]["failures"]
+
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(
+            [(one["name"], one["code"]) for one in failures],
+            [("gone", "repository_not_found"), ("bare", "not_initialized")],
+        )
+
+    def test_a_human_failure_names_the_failed_repositories(self) -> None:
+        self.write_config("alpha", "gone")
+
+        result = self.aggregate("list")
+
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("gone", result.stderr)
+
+    def test_an_invalid_configuration_fails_before_any_repository_is_read(self) -> None:
+        self.config.write_text("schema_version = 2\n", encoding="utf-8")
+
+        result = invoke("--json", "--config", str(self.config), "--all", "list")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(
+            json.loads(result.stderr)["error"]["code"], "unsupported_config_version"
+        )
+
+
+class AggregateSelectorTests(AggregateTestCase):
+    """Cover which commands and selector combinations --all accepts."""
+
+    #: Commands the aggregate selector must reject.
+    REJECTED = (
+        ("add", "New", "--type", "chore", "--simple"),
+        ("edit", "T001", "--title", "New"),
+        ("claim", "T001", "--actor", "someone"),
+        ("complete", "T001"),
+        ("cancel", "T001", "--reason", "obsolete"),
+        ("archive",),
+        ("init", "--name", "Nope"),
+        ("validate",),
+        ("show", "T001"),
+    )
+
+    def test_all_rejects_every_command_outside_the_read_queries(self) -> None:
+        for command in self.REJECTED:
+            with self.subTest(command=command[0]):
+                result = invoke(
+                    "--json", "--config", str(self.config), "--all", *command
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(json.loads(result.stderr)["error"]["code"], "usage")
+
+    def test_all_conflicts_with_the_single_repository_selectors(self) -> None:
+        conflicts = (("--root", str(self.directory / "alpha")), ("--repo", "alpha"))
+
+        for selector in conflicts:
+            with self.subTest(selector=selector[0]):
+                result = invoke(
+                    "--json", "--config", str(self.config), "--all", *selector, "list"
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(json.loads(result.stderr)["error"]["code"], "usage")
+
+    def test_config_is_accepted_alongside_all(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+
+        tasks = self.aggregate_json("list")["tasks"]
+
+        self.assertEqual(self.provenance(tasks), [("alpha", "T001")])
+
+    def test_config_without_repo_or_all_is_still_a_usage_failure(self) -> None:
+        result = invoke("--json", "--config", str(self.config), "list")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stderr)["error"]["code"], "usage")
+
+    def test_the_environment_configuration_is_honored_for_all(self) -> None:
+        self.add("beta", "beta work", "P1")
+        environment = {CONFIG_ENV_VAR: str(self.config)}
+
+        with mock.patch.dict(os.environ, environment, clear=False):
+            result = invoke("--json", "--all", "list")
+
+        tasks = json.loads(result.stdout)["data"]["tasks"]
+        self.assertEqual(self.provenance(tasks), [("beta", "T001")])
 
 
 if __name__ == "__main__":

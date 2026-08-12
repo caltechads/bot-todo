@@ -8,10 +8,10 @@ import json
 import os
 import sys
 from dataclasses import dataclass, field
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
+from bot_todo import package_version
 from bot_todo.config import CONFIG_ENV_VAR, RepositoryCollection
 from bot_todo.repository import (
     PRIORITY_HEADINGS,
@@ -20,9 +20,10 @@ from bot_todo.repository import (
     TodoError,
     TodoStore,
 )
+from bot_todo.skill_installation import TARGET_ROOTS, SkillInstaller
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
     from bot_todo.repository import RepositorySnapshot
 
@@ -34,6 +35,12 @@ JSON_SCHEMA_VERSION = 1
 EXIT_FAILURE = 1
 #: Exit status for a usage failure.
 EXIT_USAGE = 2
+#: Exit status for an aggregate query with any failed repository.
+EXIT_AGGREGATE = 3
+#: Exit status per error code, defaulting to ``EXIT_FAILURE``.
+EXIT_CODES = {"usage": EXIT_USAGE, "aggregate_partial_failure": EXIT_AGGREGATE}
+#: Commands the ``--all`` selector supports.
+AGGREGATE_COMMANDS = frozenset({"list", "critical", "actionable"})
 #: Whether this interpreter's argparse accepts the ``color`` keyword.
 SUPPORTS_COLOR_OPTION = (
     "color" in inspect.signature(argparse.ArgumentParser.__init__).parameters
@@ -57,7 +64,16 @@ EDIT_OPTIONS = (
 
 
 class _Parser(argparse.ArgumentParser):
-    """Reject long-option abbreviation and ANSI styling on every parser."""
+    """
+    Reject long-option abbreviation and ANSI styling on every parser.
+
+    Args:
+        *args: Positional arguments forwarded to ``ArgumentParser``.
+
+    Keyword Args:
+        **kwargs: Keyword arguments forwarded to ``ArgumentParser``.
+
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
@@ -65,6 +81,8 @@ class _Parser(argparse.ArgumentParser):
 
         Args:
             *args: Positional arguments forwarded to ``ArgumentParser``.
+
+        Keyword Args:
             **kwargs: Keyword arguments forwarded to ``ArgumentParser``.
 
         """
@@ -125,18 +143,24 @@ class RepositorySelector:
     """
     Resolve the settled selector options into one Task Repository.
 
-    Configuration is loaded only for ``--repo``; an explicit ``--root`` and
-    local discovery never read it and report a ``None`` Repository Name.
+    Configuration is loaded only for ``--repo`` and ``--all``; an explicit
+    ``--root`` and local discovery never read it and report a ``None``
+    Repository Name.
 
     Args:
         root: Exact repository path from ``--root``.
         repo: Configured Repository Name from ``--repo``.
+        aggregate: Whether ``--all`` selected the whole Repository Collection.
         config: Configuration path from ``--config``.
 
     """
 
     def __init__(
-        self, root: Path | None, repo: str | None, config: Path | None
+        self,
+        root: Path | None,
+        repo: str | None,
+        aggregate: bool,
+        config: Path | None,
     ) -> None:
         """
         Initialize a selector over one command's selector options.
@@ -144,6 +168,7 @@ class RepositorySelector:
         Args:
             root: Exact repository path from ``--root``.
             repo: Configured Repository Name from ``--repo``.
+            aggregate: Whether ``--all`` selected the whole collection.
             config: Configuration path from ``--config``.
 
         """
@@ -151,8 +176,49 @@ class RepositorySelector:
         self.root = root
         #: Configured Repository Name from ``--repo``.
         self.repo = repo
+        #: Whether ``--all`` selected the whole Repository Collection.
+        self.aggregate = aggregate
         #: Configuration path from ``--config``.
         self.config = config
+
+    def validate(self, command: str) -> None:
+        """
+        Reject the selector combinations the contract forbids.
+
+        Args:
+            command: Command being run.
+
+        Raises:
+            TodoError: If the selector options do not suit the command.
+
+        """
+        if command == "install-skill":
+            if self.root or self.repo or self.aggregate or self.config:
+                raise TodoError(
+                    "install-skill accepts no repository selector or configuration",
+                    "usage",
+                )
+            return
+        if self.config is not None and self.repo is None and not self.aggregate:
+            raise TodoError("--config requires --repo or --all", "usage")
+        if self.aggregate and command not in AGGREGATE_COMMANDS:
+            raise TodoError(f"--all does not support {command}", "usage")
+
+    def collection(self) -> RepositoryCollection:
+        """
+        Load the configured Repository Collection.
+
+        Side Effects:
+            Reads the configuration file.
+
+        Returns:
+            Every configured Repository Entry in configuration order.
+
+        Raises:
+            TodoError: If configuration is missing or invalid.
+
+        """
+        return RepositoryCollection.load(self._explicit())
 
     def select(self, command: str) -> SelectedRepository:
         """
@@ -173,8 +239,6 @@ class RepositorySelector:
                 repository.
 
         """
-        if self.config is not None and self.repo is None:
-            raise TodoError("--config requires --repo", "usage")
         if self.repo is not None:
             return self._configured(self.repo, command)
         if self.root is not None:
@@ -203,15 +267,26 @@ class RepositorySelector:
             TodoError: If configuration is invalid or the entry is unknown.
 
         """
-        explicit = self.config
-        if explicit is None:
-            environment = os.environ.get(CONFIG_ENV_VAR)
-            if environment:
-                explicit = Path(environment).expanduser()
-        entry = RepositoryCollection.load(explicit).entry(repo)
+        entry = self.collection().entry(repo)
         if command == "init":
             entry.path.mkdir(parents=True, exist_ok=True)
         return SelectedRepository(TodoStore(entry.path), entry.name)
+
+    def _explicit(self) -> Path | None:
+        """
+        Resolve the explicitly requested configuration path.
+
+        ``--config`` overrides ``BOT_TODO_CONFIG``; neither means the platform
+        default applies.
+
+        Returns:
+            Explicit configuration path, or ``None`` when none was requested.
+
+        """
+        if self.config is not None:
+            return self.config
+        environment = os.environ.get(CONFIG_ENV_VAR)
+        return Path(environment).expanduser() if environment else None
 
 
 class TaskPresenter:
@@ -300,6 +375,23 @@ class TaskPresenter:
 
         """
         return f"{task.task_id} {task.priority or task.state} {task.title}"
+
+    def aggregate_line(self, task: Task) -> str:
+        """
+        Build one aggregate human summary carrying its provenance.
+
+        Repository-local task IDs are ambiguous across repositories, so an
+        aggregate row names its repository. The punctuation is not contractual.
+        Every aggregate row comes from configuration and therefore has a name.
+
+        Args:
+            task: Task to summarize.
+
+        Returns:
+            Single-line summary prefixed with the Repository Name.
+
+        """
+        return f"{self.name} {self.summary_line(task)}"
 
 
 class CommandRunner:
@@ -681,6 +773,234 @@ class CommandRunner:
         return CommandOutcome({"task": self._project(snapshot, task)}, task.task_id)
 
 
+@dataclass(frozen=True)
+class AggregateRow:
+    """
+    Pair one task with the provenance and snapshot that resolve it.
+
+    Aggregate results interleave repositories, so each task has to carry the
+    repository it came from rather than inheriting one from the command.
+
+    Args:
+        presenter: Presenter carrying the source repository's provenance.
+        snapshot: Snapshot resolving that repository's blocker references.
+        task: Task the row reports.
+
+    """
+
+    #: Presenter carrying the source repository's provenance.
+    presenter: TaskPresenter
+    #: Snapshot resolving that repository's blocker references.
+    snapshot: RepositorySnapshot
+    #: Task the row reports.
+    task: Task
+
+    def as_json(self) -> dict[str, Any]:
+        """
+        Project the row into a JSON Schema 1 Task object.
+
+        Returns:
+            Task object carrying its repository provenance.
+
+        """
+        return self.presenter.as_json(
+            self.task, actionable=self.snapshot.is_actionable(self.task)
+        )
+
+    def summary_line(self) -> str:
+        """
+        Build the row's human summary.
+
+        Returns:
+            Single-line summary naming its repository.
+
+        """
+        return self.presenter.aggregate_line(self.task)
+
+
+class AggregateRunner:
+    """
+    Run one read query across the whole configured Repository Collection.
+
+    Every configured repository is inspected in configuration order, holding at
+    most one shared lock at a time. The result is therefore a sequence of
+    coherent Repository Snapshots rather than one global point-in-time snapshot.
+
+    Args:
+        collection: Repository Collection the query runs against.
+
+    """
+
+    def __init__(self, collection: RepositoryCollection) -> None:
+        """
+        Initialize a runner bound to one Repository Collection.
+
+        Args:
+            collection: Repository Collection the query runs against.
+
+        """
+        #: Repository Collection the query runs against.
+        self.collection = collection
+
+    def run(self, command: str) -> CommandOutcome:
+        """
+        Dispatch one aggregate query to its handler.
+
+        Side Effects:
+            Reads every configured repository's canonical task file.
+
+        Args:
+            command: Aggregate-capable query name.
+
+        Returns:
+            Result in both output formats.
+
+        Raises:
+            TodoError: If any configured repository cannot be read.
+
+        """
+        rows = list(self._rows())
+        handlers = {
+            "list": self._list,
+            "critical": self._critical,
+            "actionable": self._actionable,
+        }
+        return handlers[command](rows)
+
+    def _list(self, rows: Sequence[AggregateRow]) -> CommandOutcome:
+        """
+        List every open task across the collection.
+
+        Args:
+            rows: Every open task in aggregate order.
+
+        Returns:
+            Every open task, empty when no backlog has open work.
+
+        """
+        return CommandOutcome(
+            {"tasks": [row.as_json() for row in rows]},
+            "\n".join(row.summary_line() for row in rows),
+        )
+
+    def _critical(self, rows: Sequence[AggregateRow]) -> CommandOutcome:
+        """
+        Select the highest-priority open task in the collection.
+
+        Blocked and claimed tasks remain eligible.
+
+        Args:
+            rows: Every open task in aggregate order.
+
+        Returns:
+            The critical task, or a null result when nothing is open.
+
+        """
+        return self._singular(next(iter(rows), None), "no open task")
+
+    def _actionable(self, rows: Sequence[AggregateRow]) -> CommandOutcome:
+        """
+        Select the first startable task in the collection.
+
+        Blocker references stay local to each repository.
+
+        Args:
+            rows: Every open task in aggregate order.
+
+        Returns:
+            The actionable task, or a null result when none is eligible.
+
+        """
+        startable = (row for row in rows if row.snapshot.is_actionable(row.task))
+        return self._singular(next(startable, None), "no actionable task")
+
+    def _singular(self, row: AggregateRow | None, empty: str) -> CommandOutcome:
+        """
+        Build the result of a query returning at most one task.
+
+        Args:
+            row: Selected row, or ``None``.
+            empty: Explanatory line for an empty result.
+
+        Returns:
+            Nullable task result that still succeeds when empty.
+
+        """
+        if row is None:
+            return CommandOutcome({"task": None}, empty)
+        return CommandOutcome({"task": row.as_json()}, row.summary_line())
+
+    def _rows(self) -> Iterator[AggregateRow]:
+        """
+        Yield every open task in the settled aggregate order.
+
+        The order is priority first, then Repository Collection order, then
+        existing task-file order, so the repository loop sits between the two.
+
+        Side Effects:
+            Reads every configured repository's canonical task file.
+
+        Yields:
+            Each open task paired with its repository.
+
+        Raises:
+            TodoError: If any configured repository cannot be read.
+
+        """
+        repositories = self._read()
+        for priority in PRIORITY_HEADINGS:
+            for presenter, snapshot in repositories:
+                for task in snapshot.document.active[priority]:
+                    yield AggregateRow(presenter, snapshot, task)
+
+    def _read(self) -> list[tuple[TaskPresenter, RepositorySnapshot]]:
+        """
+        Snapshot every configured repository, failing strictly.
+
+        Successful repositories are discarded when any repository fails, because
+        missing data could change the global order or the selected task.
+
+        Side Effects:
+            Reads every configured repository's canonical task file.
+
+        Returns:
+            Each repository's presenter and snapshot in configuration order.
+
+        Raises:
+            TodoError: If any configured repository cannot be read, listing
+                every failure in configuration order.
+
+        """
+        repositories = []
+        failures: list[dict[str, str]] = []
+        for entry in self.collection:
+            try:
+                store = TodoStore(entry.path)
+                snapshot = store.snapshot()
+            except (TodoError, OSError) as error:
+                failures.append(
+                    {
+                        "name": entry.name,
+                        "path": str(entry.path),
+                        "code": error.code
+                        if isinstance(error, TodoError)
+                        else "io_error",
+                        "message": str(error),
+                    }
+                )
+            else:
+                repositories.append((TaskPresenter(entry.name, store.root), snapshot))
+        if failures:
+            named = ", ".join(f"{one['name']} ({one['code']})" for one in failures)
+            raise TodoError(
+                f"{len(failures)} of {len(self.collection)} repositories failed: "
+                f"{named}",
+                "aggregate_partial_failure",
+                {"failures": failures},
+            )
+        return repositories
+
+
 class OutputWriter:
     """
     Render results and failures in the selected output format.
@@ -744,18 +1064,43 @@ class OutputWriter:
             print(f"{PROGRAM_NAME}: error: {error}", file=sys.stderr)
 
 
-def _package_version() -> str:
+def _install_skill(arguments: argparse.Namespace) -> CommandOutcome:
     """
-    Return the installed distribution version.
+    Install the packaged todo skill for one Skill Target.
+
+    Side Effects:
+        Creates, updates, replaces, or backs up an installed skill tree.
+
+    Args:
+        arguments: Parsed ``install-skill`` options.
 
     Returns:
-        Installed version, or ``unknown`` when running from an unbuilt tree.
+        Machine-readable installation result and its human summary.
+
+    Raises:
+        TodoError: If the Skill Root is unusable or an unforced conflict
+            exists.
 
     """
-    try:
-        return version("bot-todo")
-    except PackageNotFoundError:
-        return "unknown"
+    result = SkillInstaller(
+        arguments.target,
+        arguments.destination,
+        dry_run=arguments.dry_run,
+        force=arguments.force,
+    ).run()
+    data = {
+        "target": result.target,
+        "skill_root": str(result.skill_root),
+        "skill_path": str(result.skill_path),
+        "action": result.action,
+        "dry_run": result.dry_run,
+        "backup_path": None if result.backup_path is None else str(result.backup_path),
+    }
+    prefix = "would " if result.dry_run else ""
+    human = f"{prefix}{result.action} {result.target} skill at {result.skill_path}"
+    if result.backup_path is not None:
+        human = f"{human}\nbacked up to {result.backup_path}"
+    return CommandOutcome(data=data, human=human)
 
 
 def _json_requested(argv: Sequence[str]) -> bool:
@@ -797,8 +1142,11 @@ def _build_parser() -> argparse.ArgumentParser:
     selector = parser.add_mutually_exclusive_group()
     selector.add_argument("--root", type=Path, help="exact task repository path")
     selector.add_argument("--repo", help="configured repository name")
+    selector.add_argument(
+        "--all", action="store_true", help="every configured repository"
+    )
     parser.add_argument(
-        "--version", action="version", version=f"{PROGRAM_NAME} {_package_version()}"
+        "--version", action="version", version=f"{PROGRAM_NAME} {package_version()}"
     )
     commands = parser.add_subparsers(
         dest="command", required=True, parser_class=_Parser
@@ -858,6 +1206,14 @@ def _build_parser() -> argparse.ArgumentParser:
     cancel.add_argument("task_id")
     cancel.add_argument("--reason", required=True)
     commands.add_parser("archive", help="enforce Done retention")
+
+    install = commands.add_parser(
+        "install-skill", help="install the bundled todo skill"
+    )
+    install.add_argument("--target", choices=sorted(TARGET_ROOTS), required=True)
+    install.add_argument("--destination", type=Path, help="skill root override")
+    install.add_argument("--dry-run", action="store_true")
+    install.add_argument("--force", action="store_true")
     return parser
 
 
@@ -886,13 +1242,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE
     writer = OutputWriter(json_mode=arguments.json)
     try:
-        selected = RepositorySelector(
-            arguments.root, arguments.repo, arguments.config
-        ).select(arguments.command)
-        outcome = CommandRunner(selected).run(arguments.command, arguments)
+        selector = RepositorySelector(
+            arguments.root, arguments.repo, arguments.all, arguments.config
+        )
+        selector.validate(arguments.command)
+        if arguments.command == "install-skill":
+            outcome = _install_skill(arguments)
+        elif arguments.all:
+            outcome = AggregateRunner(selector.collection()).run(arguments.command)
+        else:
+            outcome = CommandRunner(selector.select(arguments.command)).run(
+                arguments.command, arguments
+            )
     except TodoError as error:
         writer.failure(error)
-        return EXIT_USAGE if error.code == "usage" else EXIT_FAILURE
+        return EXIT_CODES.get(error.code, EXIT_FAILURE)
     except OSError as error:
         writer.failure(TodoError(str(error), "io_error"))
         return EXIT_FAILURE

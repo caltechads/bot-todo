@@ -41,6 +41,12 @@ One serialized, crash-recoverable mutation of a Task Repository's canonical
 task-file pair.
 _Avoid_: File write, atomic write
 
+**Aggregate Query**:
+One read-only query answered across the whole Repository Collection, ordered by
+priority, then configuration order, then task-file order. It fails entirely when
+any single repository fails.
+_Avoid_: Bulk query, global query, cross-repository operation
+
 **Critical Task**:
 The highest-priority open task, whether or not it can currently be acted upon.
 _Avoid_: Next task
@@ -63,6 +69,16 @@ _Avoid_: Destination, skill directory
 A `todo` skill installation that `bot-todo` can identify as its own and safely
 check, update, or replace.
 _Avoid_: Installed skill, owned directory
+
+**Skill Manifest**:
+The `.bot-todo-install.json` ownership record inside a Managed Skill
+Installation, naming its Skill Target and the digest of every managed asset.
+_Avoid_: Lock file, install marker
+
+**Reconciliation Action**:
+The single outcome one `install-skill` invocation classifies: install, adopt,
+update, noop, or a forced replace.
+_Avoid_: Install mode, operation
 
 **Task Data Format**:
 The versioned Markdown structure and lifecycle semantics of a Task Repository.

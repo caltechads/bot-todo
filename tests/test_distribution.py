@@ -5,14 +5,18 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 #: Repository checkout holding the build inputs.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 #: Resolved ``uv`` executable, or ``None`` when it is unavailable.
 UV = shutil.which("uv")
+#: Canonical skill assets every distribution must carry.
+SKILL_ASSETS = {"SKILL.md", "agents/openai.yaml"}
 
 
 @unittest.skipUnless(UV, "requires the uv build front end")
@@ -52,10 +56,97 @@ class WheelSmokeTests(unittest.TestCase):
                 ]
             )
             listed = self._run([str(executable), "--root", str(repository), "list"])
+            config = workspace / "config.toml"
+            config.write_text(
+                "schema_version = 1\n\n"
+                f'[[repositories]]\nname = "demo"\npath = "{repository}"\n',
+                encoding="utf-8",
+            )
+            aggregated = self._run(
+                [str(executable), "--config", str(config), "--all", "list"]
+            )
 
             self.assertIn("bot-todo", version)
             self.assertIn("Installed task", listed)
+            self.assertEqual(aggregated.strip(), "demo T001 P2 Installed task")
             self.assertTrue((repository / "TODO.md").exists())
+
+    def test_the_packaged_skill_ships_and_installs_from_a_wheel(self) -> None:
+        assert UV is not None
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            wheel, sdist = self._build_both(workspace / "dist")
+            executable = self._install(UV, wheel, workspace / "venv")
+            root = workspace / "skills"
+
+            reported = self._run(
+                [
+                    str(executable),
+                    "install-skill",
+                    "--target",
+                    "codex",
+                    "--destination",
+                    str(root),
+                ]
+            )
+
+            self.assertEqual(self._skill_assets(wheel), SKILL_ASSETS)
+            self.assertEqual(self._skill_assets(sdist), SKILL_ASSETS)
+            self.assertIn("install", reported)
+            for name in SKILL_ASSETS:
+                packaged = PROJECT_ROOT / "src" / "bot_todo" / "skill_assets" / "todo"
+                self.assertEqual(
+                    (root / "todo" / name).read_bytes(),
+                    (packaged / name).read_bytes(),
+                )
+            self.assertTrue((root / "todo" / ".bot-todo-install.json").exists())
+
+    def _build_both(self, destination: Path) -> tuple[Path, Path]:
+        """
+        Build a wheel and a source distribution from this checkout.
+
+        Side Effects:
+            Writes distribution artifacts into ``destination``.
+
+        Args:
+            destination: Directory receiving the built artifacts.
+
+        Returns:
+            Paths to the built wheel and source distribution.
+
+        """
+        assert UV is not None
+        self._run([UV, "build", "--out-dir", str(destination)], cwd=PROJECT_ROOT)
+        wheels = sorted(destination.glob("bot_todo-*.whl"))
+        archives = sorted(destination.glob("bot_todo-*.tar.gz"))
+        self.assertEqual(len(wheels), 1)
+        self.assertEqual(len(archives), 1)
+        return wheels[0], archives[0]
+
+    def _skill_assets(self, archive: Path) -> set[str]:
+        """
+        List the packaged skill assets one distribution carries.
+
+        Side Effects:
+            Reads the archive.
+
+        Args:
+            archive: Wheel or source distribution to inspect.
+
+        Returns:
+            Relative asset paths below the canonical skill directory.
+
+        """
+        if archive.suffix == ".whl":
+            with zipfile.ZipFile(archive) as wheel:
+                names = [
+                    item.filename for item in wheel.infolist() if not item.is_dir()
+                ]
+        else:
+            with tarfile.open(archive) as source:
+                names = [item.name for item in source.getmembers() if item.isfile()]
+        marker = "bot_todo/skill_assets/todo/"
+        return {name.split(marker, 1)[1] for name in names if marker in name}
 
     def _build(self, destination: Path) -> Path:
         """

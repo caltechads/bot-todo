@@ -37,16 +37,14 @@ Before changing tasks, run `validate`. Stop and repair reported errors rather
 than editing around them. Use `--help` on the CLI or a subcommand for its exact
 arguments.
 
-Use these mutations:
+Mutations follow the same shape; `edit`, `release`, and `archive` complete the
+set:
 
 ```bash
-bot-todo --root <repo> add "Title" --priority P1 --type bug --acceptance "Done when..."
+bot-todo --root <repo> add "Title" --type bug --priority P1 --acceptance "Done when..."
 bot-todo --root <repo> claim T001 --actor codex
-bot-todo --root <repo> edit T001 --priority P0 --add-tag auth
-bot-todo --root <repo> release T001
 bot-todo --root <repo> complete T001
 bot-todo --root <repo> cancel T001 --reason "Superseded"
-bot-todo --root <repo> archive
 ```
 
 Require exactly one type: `bug`, `chore`, `docs`, `feature`, or `ops`. Require
@@ -56,8 +54,16 @@ selects the highest-priority open task even when it is blocked or claimed;
 `actionable` selects the first unclaimed task whose blockers completed, in
 priority and file order.
 
-Add `--json` to any command for one machine-readable document on stdout; an
-expected failure then writes one error document to stderr instead.
+Read results as human text when reporting to a person. Add `--json` whenever the
+workflow parses a result or branches on it: it emits one machine-readable
+document on stdout, and an expected failure writes one error document to stderr
+instead.
+
+Replace the selector with `--all` to run `list`, `critical`, or `actionable`
+across every configured repository at once. Aggregate results name the
+repository each task came from, order priority first and configuration order
+second, and refuse to answer at all — exiting 3 — when any configured repository
+cannot be read. No mutation accepts `--all`.
 
 Completion and cancellation retain the ID and move the task to Done. The CLI
 keeps the newest 20 closed tasks there and retires older entries to the archive,

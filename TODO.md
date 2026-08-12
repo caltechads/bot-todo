@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 1; next-id: 4 -->
+<!-- todo-format: 1; next-id: 6 -->
 
 ## P0 — Critical / Blocking
 
@@ -8,6 +8,19 @@
 ## P2 — Backlog
 
 ## Done (recent)
+
+- [x] **T005** Bundle and install the todo skill (Phase 4) #feature
+  - Acceptance: install-skill installs the packaged todo skill for codex/claude/cursor/grok with manifests, conflict detection, dry-run, and forced replacement; skill assets ship in wheel and sdist; root skills/ tree removed
+  - Context: .scratch/installable-bot-todo/phase-4-plan.md
+  - Outcome: completed
+  - Closed: 2026-08-12
+
+- [x] **T004** Add aggregate read queries to the bot-todo CLI #feature
+  - Acceptance: --all answers list, critical, and actionable across the configured Repository Collection in priority, configuration, and file order with repository provenance, rejects every other command, and fails entirely with exit 3 when any repository fails
+  - Context: .scratch/installable-bot-todo/phase-3-plan.md
+  - Related: T003
+  - Outcome: completed
+  - Closed: 2026-08-12
 
 - [x] **T003** Complete the public single-repository bot-todo CLI #feature
   - Acceptance: Every public command and selector accepts and rejects the documented shapes, single-repository human and JSON workflows pass end to end, configuration precedence and validation match the settled contract, and unsupported task-data and configuration schema versions fail before repository access or writes.

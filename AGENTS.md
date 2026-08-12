@@ -92,7 +92,7 @@ Enforcement command:
 ## Task Management
 
 - Use `TODO.md` as the repository backlog.
-- Read `skills/todo/SKILL.md` and use the `bot-todo` CLI for all agent mutations.
+- Read `src/bot_todo/skill_assets/todo/SKILL.md` and use the `bot-todo` CLI for all agent mutations.
 - Run `bot-todo --root . validate` before and after task-file changes.
 - Keep detailed specs and implementation issues in `.scratch/<feature>/` and link them from the corresponding TODO task.
 

@@ -24,10 +24,12 @@ todo/
 installed `bot-todo` executable and contains only the guidance agents need to
 use it safely: intent routing, task-lifecycle invariants, validation before and
 after mutations, the exceptional manual merge-collision repair, and
-representative commands. Normal examples use human-readable output; workflows
-that parse results or branch on them use `--json`. Exhaustive arguments, output
-schemas, error catalogs, and installation instructions remain CLI or public
-documentation concerns.
+representative commands. Agent examples always pass `--json` on commands that
+return data; agents parse that document and summarize it for a person.
+`--all` is only for `list`, `critical`, and `actionable`, and only when the
+person explicitly asks for tasks across all projects. Exhaustive arguments,
+output schemas, error catalogs, and installation instructions remain CLI or
+public documentation concerns.
 
 The skill contains no Python scripts, tests, duplicated CLI implementation,
 generated references, or packaged executable path. It invokes `bot-todo` by

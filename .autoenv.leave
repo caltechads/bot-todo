@@ -1,0 +1,4 @@
+if [[ ! $(pwd) == *"bot_todo"* ]]; then
+    echo "Deactivating bot_todo virtual environment"
+    deactivate
+fi

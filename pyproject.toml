@@ -1,0 +1,31 @@
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[project]
+name = "bot-todo"
+version = "0.1.0"
+description = "Manage canonical repository task files."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["portalocker>=2.7"]
+
+[project.scripts]
+bot-todo = "bot_todo.cli:main"
+
+[dependency-groups]
+dev = ["mypy>=1.11", "pytest>=8", "ruff>=0.6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.ruff]
+target-version = "py311"

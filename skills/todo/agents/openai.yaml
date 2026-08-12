@@ -1,0 +1,4 @@
+interface:
+  display_name: "Todo"
+  short_description: "Manage repository Markdown tasks safely"
+  default_prompt: "Use $todo to inspect and update this repository’s TODO.md."

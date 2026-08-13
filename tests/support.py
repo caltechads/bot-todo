@@ -120,6 +120,19 @@ class TodoCliTestCase(unittest.TestCase):
         error: dict[str, Any] = document["error"]
         return error
 
+    def added_id(self, *arguments: str) -> str:
+        """
+        Add a task through the CLI and return its allocated ID.
+
+        Args:
+            *arguments: Arguments to ``add`` after the command name.
+
+        Returns:
+            The allocated task ID from the human confirmation.
+        """
+        result = self.run_cli("add", *arguments)
+        return task_id_from_confirmation(result.stdout)
+
     def add_simple(self, title: str, priority: str = "P2") -> str:
         """
         Add a simple chore and return its allocated ID.
@@ -133,7 +146,19 @@ class TodoCliTestCase(unittest.TestCase):
         Returns:
             The allocated task ID.
         """
-        result = self.run_cli(
-            "add", title, "--priority", priority, "--type", "chore", "--simple"
+        return self.added_id(
+            title, "--priority", priority, "--type", "chore", "--simple"
         )
-        return result.stdout.strip()
+
+
+def task_id_from_confirmation(stdout: str) -> str:
+    """
+    Read the Task ID from a human mutation confirmation.
+
+    Args:
+        stdout: Human confirmation text.
+
+    Returns:
+        The Task ID, which is the second whitespace token.
+    """
+    return stdout.split()[1]

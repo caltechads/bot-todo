@@ -13,15 +13,14 @@ from typing import Any
 from unittest import mock
 
 from bot_todo.config import CONFIG_ENV_VAR
-from tests.support import CliResult, TodoCliTestCase, invoke
+from tests.support import CliResult, TodoCliTestCase, invoke, task_id_from_confirmation
 
 
 class InitializationAndIdentityTests(TodoCliTestCase):
     """Verify initialization, allocation, and task identity rules."""
 
     def test_init_add_read_and_validate(self) -> None:
-        task_id = self.run_cli(
-            "add",
+        task_id = self.added_id(
             "Fix authentication",
             "--priority",
             "P1",
@@ -31,7 +30,7 @@ class InitializationAndIdentityTests(TodoCliTestCase):
             "auth",
             "--acceptance",
             "Invalid tokens are rejected",
-        ).stdout.strip()
+        )
 
         self.assertEqual(task_id, "T001")
         self.assertIn("T001", self.run_cli("list").stdout)
@@ -126,8 +125,7 @@ class LifecycleTests(TodoCliTestCase):
 
     def test_claim_release_edit_and_complete(self) -> None:
         dependency_id = self.add_simple("Dependency", "P1")
-        dependent_id = self.run_cli(
-            "add",
+        dependent_id = self.added_id(
             "Dependent",
             "--priority",
             "P1",
@@ -136,7 +134,7 @@ class LifecycleTests(TodoCliTestCase):
             "--simple",
             "--blocked-by",
             dependency_id,
-        ).stdout.strip()
+        )
 
         self.assertEqual(self.run_cli("actionable").stdout.split()[0], dependency_id)
         self.run_cli(
@@ -167,8 +165,7 @@ class LifecycleTests(TodoCliTestCase):
 
     def test_cancelled_blocker_does_not_unblock_dependent_task(self) -> None:
         blocker_id = self.add_simple("Optional prerequisite", "P1")
-        dependent_id = self.run_cli(
-            "add",
+        dependent_id = self.added_id(
             "Still needs a decision",
             "--priority",
             "P1",
@@ -177,7 +174,7 @@ class LifecycleTests(TodoCliTestCase):
             "--simple",
             "--blocked-by",
             blocker_id,
-        ).stdout.strip()
+        )
 
         self.run_cli("cancel", blocker_id, "--reason", "Superseded")
 
@@ -190,8 +187,7 @@ class LifecycleTests(TodoCliTestCase):
 
     def test_edit_clears_blockers(self) -> None:
         blocker_id = self.add_simple("Blocker", "P1")
-        dependent_id = self.run_cli(
-            "add",
+        dependent_id = self.added_id(
             "Dependent",
             "--priority",
             "P1",
@@ -200,7 +196,7 @@ class LifecycleTests(TodoCliTestCase):
             "--simple",
             "--blocked-by",
             blocker_id,
-        ).stdout.strip()
+        )
 
         self.run_cli("edit", dependent_id, "--clear-blockers")
 
@@ -285,8 +281,7 @@ class LifecycleTests(TodoCliTestCase):
         self.assertIn("invalid Closed date", result.stderr)
 
     def test_validate_rejects_blank_field_and_malformed_claim(self) -> None:
-        task_id = self.run_cli(
-            "add",
+        task_id = self.added_id(
             "Validate fields",
             "--priority",
             "P1",
@@ -294,7 +289,7 @@ class LifecycleTests(TodoCliTestCase):
             "bug",
             "--acceptance",
             "A real result",
-        ).stdout.strip()
+        )
         todo_path = self.root / "TODO.md"
         malformed = todo_path.read_text().replace(
             "  - Acceptance: A real result",
@@ -412,6 +407,30 @@ class QueryTests(TodoCliTestCase):
             self.assertIsNone(self.run_json(command)["data"]["task"])
 
 
+class HumanMutationConfirmationTests(TodoCliTestCase):
+    """Verify human mutation stdout names the operation, ID, and title."""
+
+    def test_every_mutation_confirms_the_verb_id_and_title(self) -> None:
+        added = self.run_cli("add", "Work item", "--type", "chore", "--simple")
+        self.assertEqual(added.stdout.strip(), "added T001 Work item")
+
+        claimed = self.run_cli("claim", "T001", "--actor", "codex")
+        self.assertEqual(claimed.stdout.strip(), "claimed T001 Work item")
+
+        released = self.run_cli("release", "T001")
+        self.assertEqual(released.stdout.strip(), "released T001 Work item")
+
+        edited = self.run_cli("edit", "T001", "--title", "Renamed work")
+        self.assertEqual(edited.stdout.strip(), "edited T001 Renamed work")
+
+        completed = self.run_cli("complete", "T001")
+        self.assertEqual(completed.stdout.strip(), "completed T001 Renamed work")
+
+        self.run_cli("add", "Drop me", "--type", "chore", "--simple")
+        cancelled = self.run_cli("cancel", "T002", "--reason", "Superseded")
+        self.assertEqual(cancelled.stdout.strip(), "cancelled T002 Drop me")
+
+
 class JsonDocumentTests(TodoCliTestCase):
     """Cover JSON Schema Version 1 success and error documents."""
 
@@ -445,8 +464,7 @@ class JsonDocumentTests(TodoCliTestCase):
         self.assertEqual(document["data"], {"tasks": []})
 
     def test_a_task_carries_every_documented_key(self) -> None:
-        task_id = self.run_cli(
-            "add",
+        task_id = self.added_id(
             "Fix authentication",
             "--priority",
             "P1",
@@ -460,7 +478,7 @@ class JsonDocumentTests(TodoCliTestCase):
             "docs/auth.md",
             "--related",
             "T000",
-        ).stdout.strip()
+        )
 
         task = self.run_json("show", task_id)["data"]["task"]
 
@@ -654,8 +672,7 @@ class GrammarTests(TodoCliTestCase):
         self.assertEqual(result.returncode, 2)
 
     def test_edit_clears_optional_fields(self) -> None:
-        task_id = self.run_cli(
-            "add",
+        task_id = self.added_id(
             "Work",
             "--type",
             "chore",
@@ -665,7 +682,7 @@ class GrammarTests(TodoCliTestCase):
             "docs/a.md",
             "--related",
             "T000",
-        ).stdout.strip()
+        )
 
         self.run_cli("edit", task_id, "--simple", "--clear-context", "--clear-related")
         task = self.run_json("show", task_id)["data"]["task"]
@@ -824,7 +841,7 @@ class AggregateTestCase(unittest.TestCase):
             "--simple",
             *extra,
         )
-        return result.stdout.strip()
+        return task_id_from_confirmation(result.stdout)
 
     def aggregate(self, *arguments: str) -> CliResult:
         """

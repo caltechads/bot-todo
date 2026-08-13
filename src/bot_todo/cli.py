@@ -45,6 +45,15 @@ AGGREGATE_COMMANDS = frozenset({"list", "critical", "actionable"})
 SUPPORTS_COLOR_OPTION = (
     "color" in inspect.signature(argparse.ArgumentParser.__init__).parameters
 )
+#: Past-tense verbs for human mutation confirmations, keyed by command name.
+MUTATION_VERBS = {
+    "add": "added",
+    "edit": "edited",
+    "claim": "claimed",
+    "release": "released",
+    "complete": "completed",
+    "cancel": "cancelled",
+}
 #: Options whose presence makes an ``edit`` request a real change.
 EDIT_OPTIONS = (
     "title",
@@ -376,6 +385,20 @@ class TaskPresenter:
         """
         return f"{task.task_id} {task.priority or task.state} {task.title}"
 
+    def mutation_line(self, command: str, task: Task) -> str:
+        """
+        Build one human mutation confirmation.
+
+        Args:
+            command: Mutation command name.
+            task: Task the mutation produced.
+
+        Returns:
+            Single-line confirmation with verb, task ID, and title.
+
+        """
+        return f"{MUTATION_VERBS[command]} {task.task_id} {task.title}"
+
     def aggregate_line(self, task: Task) -> str:
         """
         Build one aggregate human summary carrying its provenance.
@@ -587,7 +610,7 @@ class CommandRunner:
                 related=arguments.related,
                 blocked_by=arguments.blocked_by,
             )
-        return self._mutated(task)
+        return self._mutated("add", task)
 
     def _edit(self, arguments: argparse.Namespace) -> CommandOutcome:
         """
@@ -625,7 +648,7 @@ class CommandRunner:
                 clear_context=arguments.clear_context,
                 clear_related=arguments.clear_related,
             )
-        return self._mutated(task)
+        return self._mutated("edit", task)
 
     def _claim(self, arguments: argparse.Namespace) -> CommandOutcome:
         """
@@ -645,7 +668,7 @@ class CommandRunner:
             task = transaction.claim(
                 arguments.task_id, arguments.actor, arguments.branch
             )
-        return self._mutated(task)
+        return self._mutated("claim", task)
 
     def _release(self, arguments: argparse.Namespace) -> CommandOutcome:
         """
@@ -663,7 +686,7 @@ class CommandRunner:
         """
         with self.store.transaction() as transaction:
             task = transaction.release(arguments.task_id)
-        return self._mutated(task)
+        return self._mutated("release", task)
 
     def _complete(self, arguments: argparse.Namespace) -> CommandOutcome:
         """
@@ -681,7 +704,7 @@ class CommandRunner:
         """
         with self.store.transaction() as transaction:
             task = transaction.close(arguments.task_id, "completed")
-        return self._mutated(task)
+        return self._mutated("complete", task)
 
     def _cancel(self, arguments: argparse.Namespace) -> CommandOutcome:
         """
@@ -699,7 +722,7 @@ class CommandRunner:
         """
         with self.store.transaction() as transaction:
             task = transaction.close(arguments.task_id, "cancelled", arguments.reason)
-        return self._mutated(task)
+        return self._mutated("cancel", task)
 
     def _archive(self, _arguments: argparse.Namespace) -> CommandOutcome:
         """
@@ -755,7 +778,7 @@ class CommandRunner:
             self.presenter.summary_line(task),
         )
 
-    def _mutated(self, task: Task) -> CommandOutcome:
+    def _mutated(self, command: str, task: Task) -> CommandOutcome:
         """
         Build the result of a mutation, re-reading for actionability.
 
@@ -763,6 +786,7 @@ class CommandRunner:
             Reads the committed canonical task file.
 
         Args:
+            command: Mutation command name.
             task: Task the mutation produced.
 
         Returns:
@@ -770,7 +794,10 @@ class CommandRunner:
 
         """
         snapshot = self.store.snapshot()
-        return CommandOutcome({"task": self._project(snapshot, task)}, task.task_id)
+        return CommandOutcome(
+            {"task": self._project(snapshot, task)},
+            self.presenter.mutation_line(command, task),
+        )
 
 
 @dataclass(frozen=True)

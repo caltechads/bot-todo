@@ -170,8 +170,7 @@ class ArchiveTests(TodoCliTestCase):
 
     def test_a_cancelled_blocker_keeps_blocking_after_overflow(self) -> None:
         blocker_id = self.add_simple("Blocker", "P1")
-        dependent_id = self.run_cli(
-            "add",
+        dependent_id = self.added_id(
             "Dependent",
             "--priority",
             "P1",
@@ -180,7 +179,7 @@ class ArchiveTests(TodoCliTestCase):
             "--simple",
             "--blocked-by",
             blocker_id,
-        ).stdout.strip()
+        )
         self.run_cli("cancel", blocker_id, "--reason", "Superseded")
         for number in range(25):
             self.run_cli("complete", self.add_simple(f"Task {number:02d}"))

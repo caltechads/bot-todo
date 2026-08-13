@@ -16,3 +16,6 @@ wheels/
 
 # Task repository coordination
 .bot-todo.lock
+
+*.code-workspace
+

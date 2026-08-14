@@ -12,7 +12,7 @@ a sequential-ID merge collision.
 ## Agent invocation rules
 
 Pass `--json` on every command that returns data: `list`, `critical`,
-`actionable`, `show`, `validate`, `init`, and every mutation. Parse the JSON
+`actionable`, `show`, `validate`, `init`, `repos`, and every mutation. Parse the JSON
 document, then summarize it for a person in ordinary language. The only
 commands that stay human-only are `--help` and `--version`.
 
@@ -60,6 +60,19 @@ bot-todo --json --root <repo> add "Title" --type bug --priority P1 --acceptance 
 bot-todo --json --root <repo> claim T001 --actor codex
 bot-todo --json --root <repo> complete T001
 bot-todo --json --root <repo> cancel T001 --reason "Superseded"
+```
+
+Manage the Repository Collection with `repos`. `--config` is valid with these
+commands; `--root`, `--repo`, and `--all` are not. `repos add` defaults to the
+current directory. Pass `--name` when the directory basename is not a valid
+Repository Name.
+
+```bash
+bot-todo --json repos path
+bot-todo --json repos list
+bot-todo --json repos add
+bot-todo --json repos add --name ledger
+bot-todo --json repos remove bot-todo
 ```
 
 Require exactly one type: `bug`, `chore`, `docs`, `feature`, or `ops`. Require

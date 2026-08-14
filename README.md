@@ -86,6 +86,10 @@ bot-todo [--json] [--config PATH] [--root PATH | --repo NAME | --all] COMMAND ..
 | `complete TASK_ID` | Mark a task completed |
 | `cancel TASK_ID --reason TEXT` | Mark a task cancelled |
 | `archive` | Move older Done tasks into the archive |
+| `repos path` | Show the active configuration path |
+| `repos list` | List configured repositories |
+| `repos add [PATH]` | Add a repository entry; PATH defaults to `.` |
+| `repos remove TARGET` | Remove a repository entry by name or path |
 | `install-skill --target TARGET` | Install the bundled `todo` skill |
 
 Task IDs look like `T001` and are never reused. Types are `bug`, `chore`,
@@ -118,7 +122,8 @@ bot-todo cancel T004 --reason "Superseded by T003"
 | `--all` | Every configured repository | `list`, `critical`, `actionable` only |
 
 `--root`, `--repo`, and `--all` are mutually exclusive. `install-skill`
-accepts none of them.
+accepts none of them. `repos` accepts `--config` and rejects the other
+selectors.
 
 ```bash
 bot-todo --root ~/Programming/bot_todo list
@@ -128,7 +133,7 @@ bot-todo --all critical
 
 ### Configuration
 
-`--repo` and `--all` read a TOML file. `--config PATH` overrides
+`--repo`, `--all`, and `repos` read a TOML file. `--config PATH` overrides
 `BOT_TODO_CONFIG`, which overrides the platform default:
 
 - Unix: `${XDG_CONFIG_HOME:-~/.config}/bot-todo/config.toml`
@@ -156,6 +161,21 @@ and exits `3`.
 
 A missing default config is an empty collection. Local discovery and `--root`
 never load configuration.
+
+Manage the collection without editing the file by hand:
+
+```bash
+bot-todo repos path
+bot-todo repos list
+cd ~/Programming/new-repo
+bot-todo repos add
+bot-todo repos add --name ledger
+bot-todo repos remove ledger
+```
+
+`repos add` stores `~/...` when the path is under home, otherwise an absolute
+path. A missing default file is created on the first add. A missing `--config`
+path is an error. Duplicate names and resolved paths are rejected.
 
 ## JSON output
 

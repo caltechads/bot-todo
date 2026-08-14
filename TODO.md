@@ -1,13 +1,22 @@
 # TODO — Bot Todo
-<!-- todo-format: 1; next-id: 6 -->
+<!-- todo-format: 1; next-id: 8 -->
 
 ## P0 — Critical / Blocking
+
+- [ ] **T006** Verify AGENTS.md documents current behavior (ledger, etc.) #docs
+  - Acceptance: Done when AGENTS.md is checked against the implementation and every stale or missing detail — including the ledger — is corrected.
 
 ## P1 — High Priority
 
 ## P2 — Backlog
 
 ## Done (recent)
+
+- [x] **T007** Manage the global Repository Collection config from the CLI #feature
+  - Acceptance: Done when bot-todo can show the active config path, list configured repositories, and add/remove entries without hand-editing the TOML, each subcommand emitting --json output and validating the file before and after the write.
+  - Context: config.py only loads and validates the collection today; every change means editing the TOML by hand. Spec: .scratch/repos-cli/spec.md. Plan: .scratch/repos-cli/plan.md
+  - Outcome: completed
+  - Closed: 2026-08-14
 
 - [x] **T005** Bundle and install the todo skill (Phase 4) #feature
   - Acceptance: install-skill installs the packaged todo skill for codex/claude/cursor/grok with manifests, conflict detection, dry-run, and forced replacement; skill assets ship in wheel and sdist; root skills/ tree removed

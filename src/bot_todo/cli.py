@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from bot_todo import package_version
-from bot_todo.config import CONFIG_ENV_VAR, RepositoryCollection
+from bot_todo.config import (
+    CONFIG_ENV_VAR,
+    CollectionStore,
+    RepositoryCollection,
+    RepositoryEntry,
+)
 from bot_todo.repository import (
     PRIORITY_HEADINGS,
     TYPE_TAGS,
@@ -208,6 +213,10 @@ class RepositorySelector:
                     "usage",
                 )
             return
+        if command == "repos":
+            if self.root or self.repo or self.aggregate:
+                raise TodoError("repos accepts no repository selector", "usage")
+            return
         if self.config is not None and self.repo is None and not self.aggregate:
             raise TodoError("--config requires --repo or --all", "usage")
         if self.aggregate and command not in AGGREGATE_COMMANDS:
@@ -227,7 +236,7 @@ class RepositorySelector:
             TodoError: If configuration is missing or invalid.
 
         """
-        return RepositoryCollection.load(self._explicit())
+        return RepositoryCollection.load(self.explicit_path())
 
     def select(self, command: str) -> SelectedRepository:
         """
@@ -281,7 +290,7 @@ class RepositorySelector:
             entry.path.mkdir(parents=True, exist_ok=True)
         return SelectedRepository(TodoStore(entry.path), entry.name)
 
-    def _explicit(self) -> Path | None:
+    def explicit_path(self) -> Path | None:
         """
         Resolve the explicitly requested configuration path.
 
@@ -845,6 +854,160 @@ class AggregateRow:
         return self.presenter.aggregate_line(self.task)
 
 
+class CollectionRunner:
+    """
+    Execute one nested ``repos`` operation against the configuration file.
+
+    Args:
+        explicit: Path named by ``--config`` or the environment, or ``None``
+            to use the platform default.
+
+    """
+
+    def __init__(self, explicit: Path | None) -> None:
+        """
+        Bind one runner to a CollectionStore.
+
+        Args:
+            explicit: Path named by ``--config`` or the environment, or
+                ``None`` to use the platform default.
+
+        """
+        #: Store for the selected configuration file.
+        self.store = CollectionStore(explicit)
+
+    def run(self, arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        Dispatch one ``repos`` operation.
+
+        Side Effects:
+            May read or write the configuration file.
+
+        Args:
+            arguments: Parsed CLI arguments, including ``operation``.
+
+        Returns:
+            Result in both output formats.
+
+        """
+        handlers = {
+            "path": self._path,
+            "list": self._list,
+            "add": self._add,
+            "remove": self._remove,
+        }
+        return handlers[arguments.operation](arguments)
+
+    def _outcome(
+        self, operation: str, extra: dict[str, Any], human: str
+    ) -> CommandOutcome:
+        """
+        Build a repos result that always names the configuration path.
+
+        Args:
+            operation: Nested operation name.
+            extra: Operation-specific JSON fields.
+            human: Human-readable text, empty when the command prints nothing.
+
+        Returns:
+            Result in both output formats.
+
+        """
+        data: dict[str, Any] = {
+            "operation": operation,
+            "config_path": str(self.store.path),
+            **extra,
+        }
+        return CommandOutcome(data, human)
+
+    def _entry_payload(self, entry: RepositoryEntry) -> dict[str, str]:
+        """
+        Project one Repository Entry into JSON.
+
+        Args:
+            entry: Repository Entry to project.
+
+        Returns:
+            Name and resolved absolute path.
+
+        """
+        return {"name": entry.name, "path": str(entry.path)}
+
+    def _path(self, _arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        Report the active configuration path.
+
+        Args:
+            _arguments: Parsed CLI arguments, unused.
+
+        Returns:
+            Configuration path in both output formats.
+
+        """
+        return self._outcome("path", {}, str(self.store.path))
+
+    def _list(self, _arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        List configured Repository Entries.
+
+        Side Effects:
+            Reads the configuration file.
+
+        Args:
+            _arguments: Parsed CLI arguments, unused.
+
+        Returns:
+            Collection entries in both output formats.
+
+        """
+        collection = self.store.load()
+        repositories = [self._entry_payload(entry) for entry in collection]
+        human = "\n".join(f"{entry.name} {entry.path}" for entry in collection)
+        return self._outcome("list", {"repositories": repositories}, human)
+
+    def _add(self, arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        Append one Repository Entry.
+
+        Side Effects:
+            May create and replace the configuration file.
+
+        Args:
+            arguments: Parsed add options, including ``path`` and ``name``.
+
+        Returns:
+            The appended entry in both output formats.
+
+        """
+        entry = self.store.add(arguments.path, arguments.name)
+        return self._outcome(
+            "add",
+            {"entry": self._entry_payload(entry)},
+            f"added {entry.name} {entry.path}",
+        )
+
+    def _remove(self, arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        Remove one Repository Entry.
+
+        Side Effects:
+            Replaces the configuration file.
+
+        Args:
+            arguments: Parsed remove options, including ``target``.
+
+        Returns:
+            The removed entry in both output formats.
+
+        """
+        entry = self.store.remove(arguments.target)
+        return self._outcome(
+            "remove",
+            {"entry": self._entry_payload(entry)},
+            f"removed {entry.name} {entry.path}",
+        )
+
+
 class AggregateRunner:
     """
     Run one read query across the whole configured Repository Collection.
@@ -1234,6 +1397,18 @@ def _build_parser() -> argparse.ArgumentParser:
     cancel.add_argument("--reason", required=True)
     commands.add_parser("archive", help="enforce Done retention")
 
+    repos = commands.add_parser("repos", help="manage the repository collection")
+    operations = repos.add_subparsers(
+        dest="operation", required=True, parser_class=_Parser
+    )
+    operations.add_parser("path", help="show the active configuration path")
+    operations.add_parser("list", help="list configured repositories")
+    repos_add = operations.add_parser("add", help="add a repository entry")
+    repos_add.add_argument("path", nargs="?", default=".")
+    repos_add.add_argument("--name", help="repository name override")
+    repos_remove = operations.add_parser("remove", help="remove a repository entry")
+    repos_remove.add_argument("target")
+
     install = commands.add_parser(
         "install-skill", help="install the bundled todo skill"
     )
@@ -1275,6 +1450,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         selector.validate(arguments.command)
         if arguments.command == "install-skill":
             outcome = _install_skill(arguments)
+        elif arguments.command == "repos":
+            outcome = CollectionRunner(selector.explicit_path()).run(arguments)
         elif arguments.all:
             outcome = AggregateRunner(selector.collection()).run(arguments.command)
         else:

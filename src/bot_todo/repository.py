@@ -957,7 +957,7 @@ class TodoStore:
             f"no task repository at or above {resolved}", "repository_not_found"
         )
 
-    def initialize(self, project: str) -> None:
+    def initialize(self, project: str | None = None) -> None:
         """
         Create an empty active task file.
 
@@ -965,13 +965,17 @@ class TodoStore:
             Creates the repository directory and ``TODO.md``.
 
         Args:
-            project: Project name to place in file headings.
+            project: Project name to place in file headings. ``None`` uses
+                the repository directory basename.
 
         Raises:
             TodoError: If the active task file already exists.
 
         """
-        name = _require_text(project, "project")
+        name = _require_text(
+            project if project is not None else self.root.name,
+            "project",
+        )
         self.root.mkdir(parents=True, exist_ok=True)
         with self.lock.exclusive():
             if os.path.lexists(self.todo_path):

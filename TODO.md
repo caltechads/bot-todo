@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 1; next-id: 8 -->
+<!-- todo-format: 1; next-id: 10 -->
 
 ## P0 — Critical / Blocking
 
@@ -9,6 +9,15 @@
 ## P1 — High Priority
 
 ## P2 — Backlog
+
+- [ ] **T008** Default init --name to the cwd basename #feature
+  - Acceptance: Done when bot-todo init accepts a missing --name and writes the basename of the repository path (--root if given, otherwise cwd) into the TODO.md heading; --name remains an optional override; help, README, and the todo skill document --name as optional.
+  - Context: .scratch/init-default-name/plan.md
+
+- [ ] **T009** Ship an AGENTS.md/CLAUDE.md snippet for the task system #docs
+  - Acceptance: Done when the package provides a copy-paste Task Management section for AGENTS.md or CLAUDE.md that requires invoking the todo skill before any task lookup or mutation, forbids hand-editing TODO.md, requires bot-todo --json including validate before and after writes, and tells agents to link filesystem specs/ADRs/plans from the corresponding task.
+  - Context: .scratch/agents-md-snippet/spec.md
+  - Related: T006
 
 ## Done (recent)
 

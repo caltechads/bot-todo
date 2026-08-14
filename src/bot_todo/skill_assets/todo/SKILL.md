@@ -40,6 +40,7 @@ Replace `<repo>` with the repository root, or omit `--root` to use the nearest
 Task Repository at or above the working directory:
 
 ```bash
+bot-todo --json --root <repo> init
 bot-todo --json --root <repo> init --name "Project name"
 bot-todo --json --root <repo> validate
 bot-todo --json --root <repo> list

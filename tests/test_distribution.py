@@ -33,16 +33,7 @@ class WheelSmokeTests(unittest.TestCase):
             repository.mkdir()
 
             version = self._run([str(executable), "--version"])
-            self._run(
-                [
-                    str(executable),
-                    "--root",
-                    str(repository),
-                    "init",
-                    "--name",
-                    "Demo",
-                ]
-            )
+            self._run([str(executable), "--root", str(repository), "init"])
             self._run(
                 [
                     str(executable),

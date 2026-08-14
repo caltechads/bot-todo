@@ -113,6 +113,26 @@ class InitializationAndIdentityTests(TodoCliTestCase):
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout.strip(), "initialized")
 
+    def test_init_defaults_name_to_root_basename(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "My_App"
+            root.mkdir()
+
+            result = invoke("--root", str(root), "init")
+
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("# TODO — My_App\n", (root / "TODO.md").read_text())
+
+    def test_init_name_overrides_basename(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "My_App"
+            root.mkdir()
+
+            result = invoke("--root", str(root), "init", "--name", "Custom")
+
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("# TODO — Custom\n", (root / "TODO.md").read_text())
+
     def test_init_rejects_an_initialized_repository(self) -> None:
         result = self.run_cli("init", "--name", "Example", check=False)
 
@@ -344,6 +364,18 @@ class SelectionTests(TodoCliTestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertTrue((nested / "TODO.md").exists())
+
+    def test_init_without_selector_uses_cwd_basename(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "My_Cwd_App"
+            root.mkdir()
+
+            with contextlib.chdir(root):
+                result = invoke("init")
+
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue((root / "TODO.md").exists())
+            self.assertIn("# TODO — My_Cwd_App\n", (root / "TODO.md").read_text())
 
     def test_long_option_abbreviation_is_rejected(self) -> None:
         result = invoke("--roo", str(self.root), "list")

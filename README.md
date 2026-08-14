@@ -46,7 +46,7 @@ bot-todo --version
 From a project directory:
 
 ```bash
-bot-todo init --name "My Project"
+bot-todo init
 bot-todo add "Write the README" --type docs --priority P1 --acceptance "README covers install and usage"
 bot-todo list
 bot-todo claim T001 --actor glenn
@@ -54,7 +54,8 @@ bot-todo complete T001
 bot-todo validate
 ```
 
-`init` always targets the current directory (or `--root`). Other commands
+`init` always targets the current directory (or `--root`). Omit `--name` to use
+the repository directory basename as the project heading. Other commands
 without a selector walk from the current directory toward the filesystem root
 and use the nearest `TODO.md`.
 
@@ -73,7 +74,7 @@ bot-todo [--json] [--config PATH] [--root PATH | --repo NAME | --all] COMMAND ..
 
 | Command | Purpose |
 | --- | --- |
-| `init --name NAME` | Create `TODO.md` and `TODO.archive.md` |
+| `init [--name NAME]` | Create `TODO.md` and `TODO.archive.md` |
 | `validate` | Check the canonical files |
 | `list` | List open tasks |
 | `show TASK_ID` | Print one task |

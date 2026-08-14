@@ -1343,7 +1343,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     initialize = commands.add_parser("init", help="create the canonical task file")
-    initialize.add_argument("--name", required=True)
+    initialize.add_argument(
+        "--name",
+        help="project name (default: repository directory basename)",
+    )
     commands.add_parser("validate", help="validate the canonical task file")
     commands.add_parser("list", help="list open tasks")
 

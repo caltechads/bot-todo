@@ -20,6 +20,7 @@ from bot_todo.config import (
 )
 from bot_todo.repository import (
     PRIORITY_HEADINGS,
+    SIMPLE_TAG,
     TYPE_TAGS,
     Task,
     TodoError,
@@ -394,6 +395,20 @@ class TaskPresenter:
         """
         return f"{task.task_id} {task.priority or task.state} {task.title}"
 
+    def list_line(self, task: Task) -> str:
+        """
+        Build one human list row, including type and Tags.
+
+        Args:
+            task: Task to summarize.
+
+        Returns:
+            Single-line list row.
+
+        """
+        suffix = "".join(f" #{tag}" for tag in task.tags if tag != SIMPLE_TAG)
+        return f"{self.summary_line(task)}{suffix}"
+
     def mutation_line(self, command: str, task: Task) -> str:
         """
         Build one human mutation confirmation.
@@ -538,7 +553,7 @@ class CommandRunner:
         ]
         return CommandOutcome(
             {"tasks": [self._project(snapshot, task) for task in tasks]},
-            "\n".join(self.presenter.summary_line(task) for task in tasks),
+            "\n".join(self.presenter.list_line(task) for task in tasks),
         )
 
     def _show(self, arguments: argparse.Namespace) -> CommandOutcome:
@@ -1070,8 +1085,36 @@ class AggregateRunner:
         """
         return CommandOutcome(
             {"tasks": [row.as_json() for row in rows]},
-            "\n".join(row.summary_line() for row in rows),
+            self._human_list(rows),
         )
+
+    def _human_list(self, rows: Sequence[AggregateRow]) -> str:
+        """
+        Group open tasks under Repository Name headers.
+
+        Args:
+            rows: Every open task in aggregate order.
+
+        Returns:
+            Human list text, empty when no group has open work.
+
+        """
+        groups: dict[str, list[AggregateRow]] = {
+            entry.name: [] for entry in self.collection
+        }
+        for row in rows:
+            name = row.presenter.name
+            if name is not None:
+                groups[name].append(row)
+        chunks: list[str] = []
+        for entry in self.collection:
+            group = groups[entry.name]
+            if not group:
+                continue
+            presenter = group[0].presenter
+            lines = [entry.name, *(presenter.list_line(row.task) for row in group)]
+            chunks.append("\n".join(lines))
+        return "\n\n".join(chunks)
 
     def _critical(self, rows: Sequence[AggregateRow]) -> CommandOutcome:
         """

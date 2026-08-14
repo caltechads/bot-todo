@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 1; next-id: 14 -->
+<!-- todo-format: 1; next-id: 15 -->
 
 ## P0 — Critical / Blocking
 
@@ -35,6 +35,12 @@
   - Related: T009
 
 ## Done (recent)
+
+- [x] **T014** Group human --all list by Repository Name and show Tags #feature
+  - Acceptance: Human --all list groups open tasks under Repository Name headers without repeating the name on each line; every human list line shows ordinary Tags as #tag; JSON, critical, and actionable keep priority-first Aggregate Query order.
+  - Context: .scratch/grouped-human-list/plan.md and docs/adr/0004-group-human-all-list-by-repository-name.md
+  - Outcome: completed
+  - Closed: 2026-08-14
 
 - [x] **T008** Default init --name to the cwd basename #feature
   - Acceptance: Done when bot-todo init accepts a missing --name and writes the basename of the repository path (--root if given, otherwise cwd) into the TODO.md heading; --name remains an optional override; help, README, and the todo skill document --name as optional.

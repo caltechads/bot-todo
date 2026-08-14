@@ -59,7 +59,7 @@ class WheelSmokeTests(unittest.TestCase):
 
             self.assertIn("bot-todo", version)
             self.assertIn("Installed task", listed)
-            self.assertEqual(aggregated.strip(), "demo T001 P2 Installed task")
+            self.assertEqual(aggregated.strip(), "demo\nT001 P2 Installed task #chore")
             self.assertTrue((repository / "TODO.md").exists())
 
     def test_the_packaged_skill_ships_and_installs_from_a_wheel(self) -> None:

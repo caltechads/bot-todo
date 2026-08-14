@@ -156,7 +156,11 @@ Names are unique lowercase slugs matching `[a-z0-9][a-z0-9._-]*`. Paths may be
 absolute, start with `~`, or be relative to the configuration file. A missing
 path is valid so `init --repo NAME` can create it.
 
-`--all` orders results by priority, then configuration order, then file order.
+`--all` orders JSON results, `critical`, and `actionable` by priority, then
+configuration order, then file order. Human `--all list` groups tasks by
+Repository Name in collection order, omits repositories with no open tasks,
+and omits the name from task lines.
+
 If any configured repository cannot be read, the command prints no task data
 and exits `3`.
 

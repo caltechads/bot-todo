@@ -967,15 +967,84 @@ class AggregateQueryTests(AggregateTestCase):
 
         self.assertEqual(
             result.stdout.splitlines(),
-            ["alpha T001 P0 alpha work", "beta T001 P1 beta work"],
+            [
+                "alpha",
+                "T001 P0 alpha work #chore",
+                "",
+                "beta",
+                "T001 P1 beta work #chore",
+            ],
         )
+
+    def test_human_list_groups_by_repository_while_json_stays_priority_first(
+        self,
+    ) -> None:
+        self.add("alpha", "alpha late", "P2")
+        self.add("beta", "beta first", "P0")
+
+        result = self.aggregate("list")
+        tasks = self.aggregate_json("list")["tasks"]
+
+        self.assertEqual(self.provenance(tasks), [("beta", "T001"), ("alpha", "T001")])
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "alpha",
+                "T001 P2 alpha late #chore",
+                "",
+                "beta",
+                "T001 P0 beta first #chore",
+            ],
+        )
+
+    def test_all_list_prints_a_header_for_a_single_populated_repository(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+
+        result = self.aggregate("list")
+
+        self.assertEqual(
+            result.stdout.splitlines(), ["alpha", "T001 P0 alpha work #chore"]
+        )
+
+    def test_all_list_omits_repositories_with_no_open_tasks(self) -> None:
+        self.add("alpha", "alpha work", "P0")
+
+        result = self.aggregate("list")
+
+        self.assertEqual(
+            result.stdout.splitlines(), ["alpha", "T001 P0 alpha work #chore"]
+        )
+        self.assertNotIn("beta", result.stdout.splitlines())
+
+    def test_human_list_appends_user_tags(self) -> None:
+        self.add("alpha", "alpha work", "P0", "--tag", "auth")
+
+        listed = invoke("--config", str(self.config), "--repo", "alpha", "list")
+        aggregated = self.aggregate("list")
+
+        self.assertEqual(
+            listed.stdout.splitlines(), ["T001 P0 alpha work #chore #auth"]
+        )
+        self.assertEqual(
+            aggregated.stdout.splitlines(),
+            ["alpha", "T001 P0 alpha work #chore #auth"],
+        )
+        self.assertNotIn("#simple", listed.stdout)
+
+    def test_all_critical_keeps_a_prefixed_line_without_tags(self) -> None:
+        self.add("alpha", "alpha work", "P0", "--tag", "auth")
+
+        result = self.aggregate("critical")
+
+        self.assertEqual(result.stdout.strip(), "alpha T001 P0 alpha work")
+        self.assertNotIn("#auth", result.stdout)
 
     def test_a_single_repository_row_keeps_no_provenance_prefix(self) -> None:
         self.add("alpha", "alpha work", "P0")
 
         result = invoke("--config", str(self.config), "--repo", "alpha", "list")
 
-        self.assertEqual(result.stdout.splitlines(), ["T001 P0 alpha work"])
+        self.assertEqual(result.stdout.splitlines(), ["T001 P0 alpha work #chore"])
 
     def test_critical_returns_a_claimed_task_that_actionable_skips(self) -> None:
         self.add("alpha", "alpha work", "P0")

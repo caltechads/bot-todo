@@ -47,6 +47,11 @@ priority, then configuration order, then task-file order. It fails entirely when
 any single repository fails.
 _Avoid_: Bulk query, global query, cross-repository operation
 
+**Tag**:
+An ordinary label on a Task. It is not the classifying type and not the
+`simple` marker.
+_Avoid_: Type, hashtag, label, keyword
+
 **Critical Task**:
 The highest-priority open task, whether or not it can currently be acted upon.
 _Avoid_: Next task

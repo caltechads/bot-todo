@@ -516,7 +516,7 @@ class CommandRunner:
         text = snippet.text()
         return CommandOutcome(
             {"repository": self.presenter.repository(), "snippet": text},
-            f"initialized\n\n{text}",
+            f"initialized\n\nAdd the following to your AGENTS.md/CLAUDE.md:\n\n{text}",
         )
 
     def _validate(self, _arguments: argparse.Namespace) -> CommandOutcome:

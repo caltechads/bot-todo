@@ -12,6 +12,10 @@ _Avoid_: todo CLI, embedded CLI
 The thin agent instruction bundle that translates user intent into `bot-todo` commands.
 _Avoid_: CLI skill, bundled CLI
 
+**Task Management Snippet**:
+The packaged markdown section consuming repositories copy into `AGENTS.md` or `CLAUDE.md`.
+_Avoid_: AGENTS.md snippet, instruction block
+
 **Task Repository**:
 A local directory containing one canonical `TODO.md` and `TODO.archive.md` pair.
 Its identity is its resolved filesystem directory; separate Git worktrees are

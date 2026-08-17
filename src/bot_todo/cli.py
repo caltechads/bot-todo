@@ -27,6 +27,7 @@ from bot_todo.repository import (
     TodoStore,
 )
 from bot_todo.skill_installation import TARGET_ROOTS, SkillInstaller
+from bot_todo.task_management_snippet import TaskManagementSnippet
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -207,10 +208,10 @@ class RepositorySelector:
             TodoError: If the selector options do not suit the command.
 
         """
-        if command == "install-skill":
+        if command in {"install-skill", "snippet"}:
             if self.root or self.repo or self.aggregate or self.config:
                 raise TodoError(
-                    "install-skill accepts no repository selector or configuration",
+                    f"{command} accepts no repository selector or configuration",
                     "usage",
                 )
             return
@@ -506,12 +507,16 @@ class CommandRunner:
             arguments: Parsed CLI arguments.
 
         Returns:
-            Repository provenance and a short status line.
+            Repository provenance, the Task Management Snippet, and a
+            human status line followed by that snippet.
 
         """
         self.store.initialize(arguments.name)
+        snippet = TaskManagementSnippet()
+        text = snippet.text()
         return CommandOutcome(
-            {"repository": self.presenter.repository()}, "initialized"
+            {"repository": self.presenter.repository(), "snippet": text},
+            f"initialized\n\n{text}",
         )
 
     def _validate(self, _arguments: argparse.Namespace) -> CommandOutcome:
@@ -1336,6 +1341,21 @@ def _install_skill(arguments: argparse.Namespace) -> CommandOutcome:
     return CommandOutcome(data=data, human=human)
 
 
+def _snippet() -> CommandOutcome:
+    """
+    Return the packaged Task Management Snippet.
+
+    Side Effects:
+        Reads the packaged snippet asset.
+
+    Returns:
+        The snippet as JSON ``data.snippet`` and as human markdown.
+
+    """
+    text = TaskManagementSnippet().text()
+    return CommandOutcome({"snippet": text}, text)
+
+
 def _json_requested(argv: Sequence[str]) -> bool:
     """
     Detect ``--json`` before a namespace exists.
@@ -1462,6 +1482,10 @@ def _build_parser() -> argparse.ArgumentParser:
     install.add_argument("--destination", type=Path, help="skill root override")
     install.add_argument("--dry-run", action="store_true")
     install.add_argument("--force", action="store_true")
+    commands.add_parser(
+        "snippet",
+        help="print the Task Management section for AGENTS.md or CLAUDE.md",
+    )
     return parser
 
 
@@ -1496,6 +1520,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         selector.validate(arguments.command)
         if arguments.command == "install-skill":
             outcome = _install_skill(arguments)
+        elif arguments.command == "snippet":
+            outcome = _snippet()
         elif arguments.command == "repos":
             outcome = CollectionRunner(selector.explicit_path()).run(arguments)
         elif arguments.all:

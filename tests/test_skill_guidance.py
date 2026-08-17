@@ -58,3 +58,23 @@ class SkillGuidanceTests(unittest.TestCase):
             self.text,
             r"only when the person explicitly asks",
         )
+
+    def test_json_invocation_list_includes_snippet(self) -> None:
+        self.assertRegex(
+            self.text,
+            re.compile(
+                r"Pass `--json` on every command that returns data:.*`snippet`",
+                re.DOTALL,
+            ),
+        )
+
+    def test_init_tells_agents_to_ask_before_writing_instruction_files(self) -> None:
+        self.assertIn("data.snippet", self.text)
+        self.assertRegex(
+            self.text,
+            r"ask whether to add it to `AGENTS\.md` or `CLAUDE\.md`",
+        )
+        self.assertRegex(
+            self.text,
+            re.compile(r"Do not write\s+those files unless asked", re.DOTALL),
+        )

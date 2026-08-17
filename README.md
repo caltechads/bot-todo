@@ -55,9 +55,12 @@ bot-todo validate
 ```
 
 `init` always targets the current directory (or `--root`). Omit `--name` to use
-the repository directory basename as the project heading. Other commands
-without a selector walk from the current directory toward the filesystem root
-and use the nearest `TODO.md`.
+the repository directory basename as the project heading. Successful human
+`init` prints a copy-paste Task Management section for `AGENTS.md` or
+`CLAUDE.md`; JSON `init` includes that text as `data.snippet`. `bot-todo`
+never writes those instruction files. Other commands without a selector walk
+from the current directory toward the filesystem root and use the nearest
+`TODO.md`.
 
 ## Usage
 
@@ -92,6 +95,7 @@ bot-todo [--json] [--config PATH] [--root PATH | --repo NAME | --all] COMMAND ..
 | `repos add [PATH]` | Add a repository entry; PATH defaults to `.` |
 | `repos remove TARGET` | Remove a repository entry by name or path |
 | `install-skill --target TARGET` | Install the bundled `todo` skill |
+| `snippet` | Print the Task Management section for `AGENTS.md` or `CLAUDE.md` |
 
 Task IDs look like `T001` and are never reused. Types are `bug`, `chore`,
 `docs`, `feature`, and `ops`. Priorities are `P0`, `P1`, and `P2` (default
@@ -122,8 +126,8 @@ bot-todo cancel T004 --reason "Superseded by T003"
 | `--repo NAME` | One named entry from configuration | Task commands |
 | `--all` | Every configured repository | `list`, `critical`, `actionable` only |
 
-`--root`, `--repo`, and `--all` are mutually exclusive. `install-skill`
-accepts none of them. `repos` accepts `--config` and rejects the other
+`--root`, `--repo`, and `--all` are mutually exclusive. `install-skill` and
+`snippet` accept none of them. `repos` accepts `--config` and rejects the other
 selectors.
 
 ```bash

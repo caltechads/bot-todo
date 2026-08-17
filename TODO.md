@@ -3,9 +3,6 @@
 
 ## P0 — Critical / Blocking
 
-- [ ] **T006** Verify AGENTS.md documents current behavior (ledger, etc.) #docs
-  - Acceptance: Done when AGENTS.md is checked against the implementation and every stale or missing detail — including the ledger — is corrected.
-
 ## P1 — High Priority
 
 - [ ] **T013** Prepare bot-todo for public deployment and deploy it #ops
@@ -14,11 +11,6 @@
   - Related: T003
 
 ## P2 — Backlog
-
-- [ ] **T009** Ship an AGENTS.md/CLAUDE.md snippet for the task system #docs
-  - Acceptance: Done when the package provides a copy-paste Task Management section for AGENTS.md or CLAUDE.md that requires invoking the todo skill before any task lookup or mutation, forbids hand-editing TODO.md, requires bot-todo --json including validate before and after writes, and tells agents to link filesystem specs/ADRs/plans from the corresponding task.
-  - Context: .scratch/agents-md-snippet/spec.md
-  - Related: T006
 
 - [ ] **T010** Add a NiceGUI Kanban web frontend #feature
   - Acceptance: Done when a NiceGUI Kanban board can browse and mutate tasks in a Task Repository through bot-todo's existing core rather than by hand-editing TODO.md, covering at least list, show, add, and complete, with columns that reflect task state.
@@ -29,12 +21,26 @@
   - Context: Today a task is open, claimed, completed, or cancelled. Review sits between claimed and completed so validation can happen before Outcome completed. Related Kanban work: T010.
   - Related: T010
 
-- [ ] **T012** Require claiming a task before planning or implementing #docs
-  - Acceptance: Done when the AGENTS.md Task Management text tells agents to claim a task before planning or implementing it, and the T009 snippet draft matches that rule if it is still the canonical copy-paste text.
-  - Context: Today the Task Management section covers using TODO.md and bot-todo but does not require a claim first. Related: T006, T009.
-  - Related: T009
-
 ## Done (recent)
+
+- [x] **T012** Require claiming a task before planning or implementing #docs
+  - Acceptance: Done when the AGENTS.md Task Management text tells agents to claim a task before planning or implementing it, and the T009 snippet draft matches that rule if it is still the canonical copy-paste text.
+  - Context: .scratch/agents-md-snippet/spec.md, .scratch/agents-md-snippet/plan.md, and docs/adr/0005-emit-task-management-snippet-do-not-write-instruction-files.md. This repo AGENTS.md gains claim-first while keeping local skill-path and .scratch bullets.
+  - Related: T009
+  - Outcome: completed
+  - Closed: 2026-08-17
+
+- [x] **T009** Ship an AGENTS.md/CLAUDE.md snippet for the task system #docs
+  - Acceptance: Done when the package provides a copy-paste Task Management section for AGENTS.md or CLAUDE.md that requires invoking the todo skill before any task lookup or mutation, forbids hand-editing TODO.md, requires bot-todo --json including validate before and after writes, and tells agents to link filesystem specs/ADRs/plans from the corresponding task.
+  - Context: .scratch/agents-md-snippet/spec.md, .scratch/agents-md-snippet/plan.md, and docs/adr/0005-emit-task-management-snippet-do-not-write-instruction-files.md
+  - Related: T006
+  - Outcome: completed
+  - Closed: 2026-08-17
+
+- [x] **T006** Verify AGENTS.md documents current behavior (ledger, etc.) #docs
+  - Acceptance: Done when AGENTS.md is checked against the implementation and every stale or missing detail — including the ledger — is corrected.
+  - Outcome: completed
+  - Closed: 2026-08-17
 
 - [x] **T014** Group human --all list by Repository Name and show Tags #feature
   - Acceptance: Human --all list groups open tasks under Repository Name headers without repeating the name on each line; every human list line shows ordinary Tags as #tag; JSON, critical, and actionable keep priority-first Aggregate Query order.

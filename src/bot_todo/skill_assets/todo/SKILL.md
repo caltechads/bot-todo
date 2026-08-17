@@ -12,9 +12,9 @@ a sequential-ID merge collision.
 ## Agent invocation rules
 
 Pass `--json` on every command that returns data: `list`, `critical`,
-`actionable`, `show`, `validate`, `init`, `repos`, and every mutation. Parse the JSON
-document, then summarize it for a person in ordinary language. The only
-commands that stay human-only are `--help` and `--version`.
+`actionable`, `show`, `validate`, `init`, `repos`, `snippet`, and every
+mutation. Parse the JSON document, then summarize it for a person in ordinary
+language. The only commands that stay human-only are `--help` and `--version`.
 
 Do not omit `--json` because a person will read your reply. Human CLI output
 is for humans typing in a terminal, not for agents.
@@ -42,12 +42,18 @@ Task Repository at or above the working directory:
 ```bash
 bot-todo --json --root <repo> init
 bot-todo --json --root <repo> init --name "Project name"
+bot-todo --json snippet
 bot-todo --json --root <repo> validate
 bot-todo --json --root <repo> list
 bot-todo --json --root <repo> critical
 bot-todo --json --root <repo> actionable
 bot-todo --json --root <repo> show T001
 ```
+
+After a successful `init`, parse `data.snippet`. Show that Task Management
+section and ask whether to add it to `AGENTS.md` or `CLAUDE.md`. Do not write
+those files unless asked. `snippet` accepts no repository selector or
+configuration; use it later to retrieve the same text.
 
 Before changing tasks, run `validate`. Stop and repair reported errors rather
 than editing around them. Use `--help` on the CLI or a subcommand for its exact

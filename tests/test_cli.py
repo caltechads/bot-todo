@@ -14,6 +14,7 @@ from unittest import mock
 
 from bot_todo.config import CONFIG_ENV_VAR
 from tests.support import CliResult, TodoCliTestCase, invoke, task_id_from_confirmation
+from tests.test_task_management_snippet import EXPECTED
 
 
 class InitializationAndIdentityTests(TodoCliTestCase):
@@ -111,7 +112,7 @@ class InitializationAndIdentityTests(TodoCliTestCase):
             result = invoke("--root", directory, "init", "--name", "Example")
 
             self.assertEqual(result.returncode, 0)
-            self.assertEqual(result.stdout.strip(), "initialized")
+            self.assertEqual(result.stdout, f"initialized\n\n{EXPECTED}")
 
     def test_init_defaults_name_to_root_basename(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -625,6 +626,7 @@ class JsonDocumentTests(TodoCliTestCase):
 
         self.assertEqual(document["command"], "init")
         self.assertEqual(document["data"]["repository"]["name"], None)
+        self.assertEqual(document["data"]["snippet"], EXPECTED.rstrip("\n"))
 
     def test_an_expected_failure_writes_one_error_document_to_stderr(self) -> None:
         error = self.run_json_error("show", "T999")

@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "bot-todo"
-version = "0.1.0"
+version = "0.2.0"
 description = "Manage canonical repository task files."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -57,7 +57,7 @@ target-version = "py311"
 # bump-my-version Configuration
 ###############################################################################
 [tool.bumpversion]
-current_version = "0.1.0"
+current_version = "0.2.0"
 commit = true
 tag = true
 tag_name = "{new_version}"

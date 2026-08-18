@@ -17,20 +17,7 @@ The only runtime dependency is `portalocker`, used for per-repository locking.
 ## Installation
 
 ```bash
-uv tool bot-todo
-```
-
-That puts `bot-todo` on your `PATH` in an isolated environment. While hacking
-on the CLI itself, keep the checkout live:
-
-```bash
-uv tool install --editable .
-```
-
-One-shot use without a persistent install:
-
-```bash
-uvx --from . bot-todo --help
+uv tool install bot-todo
 ```
 
 Confirm the install:

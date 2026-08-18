@@ -16,10 +16,8 @@ The only runtime dependency is `portalocker`, used for per-repository locking.
 
 ## Installation
 
-The distribution is not on PyPI yet. Install it from a checkout:
-
 ```bash
-uv tool install .
+uv tool bot-todo
 ```
 
 That puts `bot-todo` on your `PATH` in an isolated environment. While hacking

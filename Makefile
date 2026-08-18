@@ -5,6 +5,11 @@ PACKAGE = bot-todo
 version::
 	@echo $(VERSION)
 
+clean:
+	rm -rf *.tar.gz dist build *.egg-info *.rpm
+	find . -name "*.pyc" | xargs rm
+	find . -name "__pycache__" | xargs rm -rf
+
 dist: clean
 	@python -m build
 

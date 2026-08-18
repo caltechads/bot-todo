@@ -30,7 +30,7 @@ check-clean:
 # Expects BUMP=dev|patch|minor|major
 _release: check-branch check-clean clean
 	@echo "Releasing $(BUMP) version"
-	@bump-my-version "$(BUMP)"
+	@bump-my-version bump "$(BUMP)"
 	@python -m build
 	@bin/release.sh
 

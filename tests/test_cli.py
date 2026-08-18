@@ -40,7 +40,7 @@ class InitializationAndIdentityTests(TodoCliTestCase):
         self.assertEqual(self.run_cli("validate").stdout.strip(), "valid")
 
         todo = (self.root / "TODO.md").read_text()
-        self.assertIn("<!-- todo-format: 1; next-id: 2 -->", todo)
+        self.assertIn("<!-- todo-format: 2; next-id: 2 -->", todo)
         self.assertIn("#bug #auth", todo)
         self.assertIn("Acceptance: Invalid tokens are rejected", todo)
 
@@ -112,7 +112,12 @@ class InitializationAndIdentityTests(TodoCliTestCase):
             result = invoke("--root", directory, "init", "--name", "Example")
 
             self.assertEqual(result.returncode, 0)
-            self.assertEqual(result.stdout, f"initialized\n\n{EXPECTED}")
+            self.assertEqual(
+                result.stdout,
+                "initialized\n\n"
+                "Add the following to your AGENTS.md/CLAUDE.md:\n\n"
+                f"{EXPECTED}",
+            )
 
     def test_init_defaults_name_to_root_basename(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -324,6 +329,148 @@ class LifecycleTests(TodoCliTestCase):
         self.assertIn(task_id, result.stderr)
 
 
+class ReviewStateTests(TodoCliTestCase):
+    """Cover Review transitions, selectors, and JSON."""
+
+    def test_review_clears_claim_and_stays_in_priority_section(self) -> None:
+        task_id = self.add_simple("Needs a look", "P1")
+        self.run_cli(
+            "claim", task_id, "--actor", "codex", "--branch", "feature/review"
+        )
+        result = self.run_cli("review", task_id)
+        self.assertEqual(result.stdout.strip(), f"reviewed {task_id} Needs a look")
+
+        shown = self.run_cli("show", task_id).stdout
+        self.assertIn("Review:", shown)
+        self.assertNotIn("Claimed:", shown)
+        self.assertNotIn("Outcome:", shown)
+        todo = (self.root / "TODO.md").read_text(encoding="utf-8")
+        p1 = todo.index("## P1")
+        done = todo.index("## Done")
+        self.assertLess(p1, todo.index(task_id))
+        self.assertLess(todo.index(task_id), done)
+
+        task = self.run_json("show", task_id)["data"]["task"]
+        self.assertEqual(task["state"], "review")
+        self.assertEqual(task["priority"], "P1")
+        self.assertIsNone(task["claim"])
+        self.assertFalse(task["actionable"])
+        self.assertRegex(task["reviewed_on"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertIsNone(task["closed_on"])
+
+    def test_unclaimed_open_task_can_enter_review(self) -> None:
+        task_id = self.add_simple("Unclaimed work", "P2")
+        self.run_cli("review", task_id)
+        self.assertEqual(
+            self.run_json("show", task_id)["data"]["task"]["state"], "review"
+        )
+
+    def test_list_includes_review_with_state_word(self) -> None:
+        open_id = self.add_simple("Still open", "P1")
+        review_id = self.add_simple("Waiting", "P1")
+        self.run_cli("review", review_id)
+        lines = self.run_cli("list").stdout.splitlines()
+        self.assertIn(f"{open_id} P1 Still open #chore", lines)
+        self.assertIn(f"{review_id} P1 review Waiting #chore", lines)
+
+    def test_critical_and_actionable_skip_review(self) -> None:
+        first = self.add_simple("In review", "P0")
+        second = self.add_simple("Still open", "P1")
+        self.run_cli("review", first)
+        self.assertEqual(self.run_cli("critical").stdout.split()[0], second)
+        self.assertEqual(self.run_cli("actionable").stdout.split()[0], second)
+
+    def test_review_does_not_satisfy_blockers(self) -> None:
+        blocker = self.add_simple("Blocker", "P1")
+        dependent = self.added_id(
+            "Dependent",
+            "--priority",
+            "P1",
+            "--type",
+            "feature",
+            "--simple",
+            "--blocked-by",
+            blocker,
+        )
+        self.run_cli("review", blocker)
+        self.assertEqual(
+            self.run_cli("actionable").stdout.strip(), "no actionable task"
+        )
+        self.assertIn(dependent, self.run_cli("list").stdout)
+
+    def test_complete_from_review_and_from_open(self) -> None:
+        reviewed = self.add_simple("Reviewed work", "P2")
+        opened = self.add_simple("Direct complete", "P2")
+        self.run_cli("review", reviewed)
+        self.run_cli("complete", reviewed)
+        self.run_cli("complete", opened)
+        self.assertEqual(
+            self.run_json("show", reviewed)["data"]["task"]["state"], "completed"
+        )
+        self.assertIsNone(
+            self.run_json("show", reviewed)["data"]["task"]["reviewed_on"]
+        )
+        self.assertEqual(
+            self.run_json("show", opened)["data"]["task"]["state"], "completed"
+        )
+
+    def test_cancel_from_review(self) -> None:
+        task_id = self.add_simple("Abandoned in review", "P2")
+        self.run_cli("review", task_id)
+        self.run_cli("cancel", task_id, "--reason", "Not shipping")
+        task = self.run_json("show", task_id)["data"]["task"]
+        self.assertEqual(task["state"], "cancelled")
+        self.assertEqual(task["reason"], "Not shipping")
+        self.assertIsNone(task["reviewed_on"])
+
+    def test_reopen_returns_to_open_and_is_actionable(self) -> None:
+        task_id = self.add_simple("Send back", "P1")
+        self.run_cli("review", task_id)
+        result = self.run_cli("reopen", task_id)
+        self.assertEqual(result.stdout.strip(), f"reopened {task_id} Send back")
+        task = self.run_json("show", task_id)["data"]["task"]
+        self.assertEqual(task["state"], "open")
+        self.assertIsNone(task["reviewed_on"])
+        self.assertTrue(task["actionable"])
+        self.assertIn(f"{task_id} P1 Send back #chore", self.run_cli("list").stdout)
+
+    def test_reopen_rejects_open_and_completed(self) -> None:
+        opened = self.add_simple("Never reviewed", "P2")
+        closed = self.add_simple("Already done", "P2")
+        self.run_cli("complete", closed)
+        self.assertEqual(
+            self.run_json_error("reopen", opened)["code"], "invalid_transition"
+        )
+        self.assertEqual(
+            self.run_json_error("reopen", closed)["code"], "invalid_transition"
+        )
+
+    def test_claim_and_second_review_are_invalid_in_review(self) -> None:
+        task_id = self.add_simple("Locked", "P2")
+        self.run_cli("review", task_id)
+        self.assertEqual(
+            self.run_json_error(
+                "claim", task_id, "--actor", "codex", "--branch", "x"
+            )["code"],
+            "invalid_transition",
+        )
+        self.assertEqual(
+            self.run_json_error("review", task_id)["code"], "invalid_transition"
+        )
+
+    def test_edit_is_legal_in_review(self) -> None:
+        task_id = self.add_simple("Editable", "P2")
+        self.run_cli("review", task_id)
+        self.run_cli("edit", task_id, "--title", "Still editable")
+        self.assertEqual(
+            self.run_json("show", task_id)["data"]["task"]["title"],
+            "Still editable",
+        )
+        self.assertEqual(
+            self.run_json("show", task_id)["data"]["task"]["state"], "review"
+        )
+
+
 class SelectionTests(TodoCliTestCase):
     """Verify repository selection, discovery, and process contract."""
 
@@ -485,6 +632,7 @@ class JsonDocumentTests(TodoCliTestCase):
             "claim",
             "actionable",
             "closed_on",
+            "reviewed_on",
             "reason",
         }
     )
@@ -492,7 +640,7 @@ class JsonDocumentTests(TodoCliTestCase):
     def test_the_success_envelope_names_its_command_and_version(self) -> None:
         document = self.run_json("list")
 
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
         self.assertEqual(document["command"], "list")
         self.assertEqual(document["data"], {"tasks": []})
 
@@ -529,6 +677,7 @@ class JsonDocumentTests(TodoCliTestCase):
         self.assertIsNone(task["claim"])
         self.assertTrue(task["actionable"])
         self.assertIsNone(task["closed_on"])
+        self.assertIsNone(task["reviewed_on"])
         self.assertIsNone(task["reason"])
 
     def test_repository_provenance_is_absolute_and_unnamed_without_configuration(
@@ -638,7 +787,7 @@ class JsonDocumentTests(TodoCliTestCase):
         path = self.root / "TODO.md"
         path.write_text(
             path.read_text(encoding="utf-8").replace(
-                "todo-format: 1", "todo-format: 2"
+                "todo-format: 2", "todo-format: 3"
             ),
             encoding="utf-8",
         )
@@ -646,8 +795,8 @@ class JsonDocumentTests(TodoCliTestCase):
         error = self.run_json_error("validate")
 
         self.assertEqual(error["code"], "unsupported_format_version")
-        self.assertEqual(error["encountered"], 2)
-        self.assertEqual(error["supported"], [1])
+        self.assertEqual(error["encountered"], 3)
+        self.assertEqual(error["supported"], [1, 2])
 
     def test_exactly_one_document_is_written(self) -> None:
         self.add_simple("Work")
@@ -656,6 +805,68 @@ class JsonDocumentTests(TodoCliTestCase):
 
         self.assertEqual(stdout.count("\n"), 1)
         self.assertTrue(stdout.endswith("\n"))
+
+
+class MigrationTests(TodoCliTestCase):
+    """Cover Task Data Format 1 dual-read and opt-in migrate."""
+
+    def test_format_1_remains_readable(self) -> None:
+        path = self.root / "TODO.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("todo-format: 2", "todo-format: 1"),
+            encoding="utf-8",
+        )
+        result = self.run_cli("validate")
+        self.assertEqual(result.stdout.strip(), "valid")
+
+    def test_mutating_format_1_requires_migrate(self) -> None:
+        path = self.root / "TODO.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("todo-format: 2", "todo-format: 1"),
+            encoding="utf-8",
+        )
+        error = self.run_json_error("add", "Work", "--type", "chore", "--simple")
+        self.assertEqual(error["code"], "migration_required")
+        self.assertEqual(error["encountered"], 1)
+        self.assertEqual(error["required"], 2)
+        self.assertIn("todo-format: 1", path.read_text(encoding="utf-8"))
+
+    def test_migrate_rewrites_format_1_to_2(self) -> None:
+        path = self.root / "TODO.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("todo-format: 2", "todo-format: 1"),
+            encoding="utf-8",
+        )
+        document = self.run_json("migrate")
+        self.assertEqual(document["command"], "migrate")
+        self.assertEqual(document["data"]["from"], 1)
+        self.assertEqual(document["data"]["to"], 2)
+        self.assertIn("todo-format: 2", path.read_text(encoding="utf-8"))
+        self.run_cli("add", "Work", "--type", "chore", "--simple")
+
+    def test_migrate_on_format_2_is_a_successful_noop(self) -> None:
+        document = self.run_json("migrate")
+        self.assertEqual(document["data"]["from"], 2)
+        self.assertEqual(document["data"]["to"], 2)
+
+    def test_format_1_rejects_a_review_field(self) -> None:
+        path = self.root / "TODO.md"
+        body = path.read_text(encoding="utf-8").replace(
+            "todo-format: 2", "todo-format: 1"
+        )
+        body = body.replace(
+            "next-id: 1",
+            "next-id: 2",
+        )
+        body = body.replace(
+            "## P2 — Backlog\n",
+            "## P2 — Backlog\n\n"
+            "- [ ] **T001** Hand edited #chore #simple\n"
+            "  - Review: 2026-08-17\n",
+        )
+        path.write_text(body, encoding="utf-8")
+        error = self.run_json_error("validate")
+        self.assertEqual(error["code"], "invalid_document")
 
 
 class GrammarTests(TodoCliTestCase):
@@ -1040,6 +1251,15 @@ class AggregateQueryTests(AggregateTestCase):
 
         self.assertEqual(result.stdout.strip(), "alpha T001 P0 alpha work")
         self.assertNotIn("#auth", result.stdout)
+
+    def test_all_critical_skips_review_tasks(self) -> None:
+        self.add("alpha", "in review", "P0")
+        self.add("beta", "still open", "P1")
+        self.run_in("alpha", "review", "T001")
+
+        result = self.aggregate("critical")
+
+        self.assertEqual(result.stdout.strip(), "beta T001 P1 still open")
 
     def test_a_single_repository_row_keeps_no_provenance_prefix(self) -> None:
         self.add("alpha", "alpha work", "P0")

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 #: Executable name used in help output and diagnostics.
 PROGRAM_NAME = "bot-todo"
 #: Compatibility version of machine-readable success and error documents.
-JSON_SCHEMA_VERSION = 1
+JSON_SCHEMA_VERSION = 2
 #: Exit status for an operational, domain, data, or filesystem failure.
 EXIT_FAILURE = 1
 #: Exit status for a usage failure.
@@ -60,6 +60,8 @@ MUTATION_VERBS = {
     "release": "released",
     "complete": "completed",
     "cancel": "cancelled",
+    "review": "reviewed",
+    "reopen": "reopened",
 }
 #: Options whose presence makes an ``edit`` request a real change.
 EDIT_OPTIONS = (
@@ -345,7 +347,7 @@ class TaskPresenter:
 
     def as_json(self, task: Task, *, actionable: bool) -> dict[str, Any]:
         """
-        Project one task into a JSON Schema 1 Task object.
+        Project one task into a JSON Schema 2 Task object.
 
         Args:
             task: Task to project.
@@ -380,6 +382,7 @@ class TaskPresenter:
             },
             "actionable": actionable,
             "closed_on": task.closed_on,
+            "reviewed_on": task.reviewed_on,
             "reason": task.reason,
         }
 
@@ -408,6 +411,8 @@ class TaskPresenter:
 
         """
         suffix = "".join(f" #{tag}" for tag in task.tags if tag != SIMPLE_TAG)
+        if task.state == "review":
+            return f"{task.task_id} {task.priority} review {task.title}{suffix}"
         return f"{self.summary_line(task)}{suffix}"
 
     def mutation_line(self, command: str, task: Task) -> str:
@@ -492,7 +497,10 @@ class CommandRunner:
             "release": self._release,
             "complete": self._complete,
             "cancel": self._cancel,
+            "review": self._review,
+            "reopen": self._reopen,
             "archive": self._archive,
+            "migrate": self._migrate,
         }
         return handlers[command](arguments)
 
@@ -538,7 +546,7 @@ class CommandRunner:
 
     def _list(self, _arguments: argparse.Namespace) -> CommandOutcome:
         """
-        List every open task.
+        List every open and Review task.
 
         Side Effects:
             Reads the canonical task file.
@@ -547,7 +555,7 @@ class CommandRunner:
             _arguments: Parsed CLI arguments, unused.
 
         Returns:
-            Every open task, empty when the backlog is clear.
+            Every unfinished task, empty when the backlog is clear.
 
         """
         snapshot = self.store.snapshot()
@@ -753,6 +761,42 @@ class CommandRunner:
             task = transaction.close(arguments.task_id, "cancelled", arguments.reason)
         return self._mutated("cancel", task)
 
+    def _review(self, arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        Move one open task into Review.
+
+        Side Effects:
+            Updates the canonical task file.
+
+        Args:
+            arguments: Parsed CLI arguments.
+
+        Returns:
+            The task now in Review.
+
+        """
+        with self.store.transaction() as transaction:
+            task = transaction.review(arguments.task_id)
+        return self._mutated("review", task)
+
+    def _reopen(self, arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        Return one Review task to open.
+
+        Side Effects:
+            Updates the canonical task file.
+
+        Args:
+            arguments: Parsed CLI arguments.
+
+        Returns:
+            The reopened task.
+
+        """
+        with self.store.transaction() as transaction:
+            task = transaction.reopen(arguments.task_id)
+        return self._mutated("reopen", task)
+
     def _archive(self, _arguments: argparse.Namespace) -> CommandOutcome:
         """
         Enforce Done retention.
@@ -771,6 +815,36 @@ class CommandRunner:
             moved = transaction.retire_overflow()
         return CommandOutcome({"archived": moved}, str(moved))
 
+    def _migrate(self, _arguments: argparse.Namespace) -> CommandOutcome:
+        """
+        Upgrade the Task Data Format to the write version.
+
+        Side Effects:
+            Rewrites the canonical task file's format marker when it is not
+            already the write version.
+
+        Args:
+            _arguments: Parsed CLI arguments, unused.
+
+        Returns:
+            Encountered and write format versions.
+
+        """
+        with self.store.transaction() as transaction:
+            encountered, required = transaction.migrate()
+        return CommandOutcome(
+            {
+                "repository": self.presenter.repository(),
+                "from": encountered,
+                "to": required,
+            },
+            (
+                f"already format {required}"
+                if encountered == required
+                else f"migrated {encountered} -> {required}"
+            ),
+        )
+
     def _project(self, snapshot: RepositorySnapshot, task: Task) -> dict[str, Any]:
         """
         Project one task with its actionability resolved.
@@ -780,7 +854,7 @@ class CommandRunner:
             task: Task to project.
 
         Returns:
-            JSON Schema 1 Task object.
+            JSON Schema 2 Task object.
 
         """
         return self.presenter.as_json(task, actionable=snapshot.is_actionable(task))
@@ -853,7 +927,7 @@ class AggregateRow:
 
     def as_json(self) -> dict[str, Any]:
         """
-        Project the row into a JSON Schema 1 Task object.
+        Project the row into a JSON Schema 2 Task object.
 
         Returns:
             Task object carrying its repository provenance.
@@ -1134,7 +1208,10 @@ class AggregateRunner:
             The critical task, or a null result when nothing is open.
 
         """
-        return self._singular(next(iter(rows), None), "no open task")
+        return self._singular(
+            next((row for row in rows if row.task.state == "open"), None),
+            "no open task",
+        )
 
     def _actionable(self, rows: Sequence[AggregateRow]) -> CommandOutcome:
         """
@@ -1411,7 +1488,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="project name (default: repository directory basename)",
     )
     commands.add_parser("validate", help="validate the canonical task file")
-    commands.add_parser("list", help="list open tasks")
+    commands.add_parser("list", help="list open and review tasks")
 
     show = commands.add_parser("show", help="show one task")
     show.add_argument("task_id")
@@ -1430,7 +1507,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add.add_argument("--related")
     add.add_argument("--blocked-by", action="append")
 
-    edit = commands.add_parser("edit", help="edit an open task")
+    edit = commands.add_parser("edit", help="edit an open or review task")
     edit.add_argument("task_id")
     edit.add_argument("--title")
     edit.add_argument("--priority", choices=PRIORITY_HEADINGS)
@@ -1456,12 +1533,17 @@ def _build_parser() -> argparse.ArgumentParser:
     claim.add_argument("--branch")
     release = commands.add_parser("release", help="release an open claim")
     release.add_argument("task_id")
-    complete = commands.add_parser("complete", help="complete an open task")
+    complete = commands.add_parser("complete", help="complete an open or review task")
     complete.add_argument("task_id")
-    cancel = commands.add_parser("cancel", help="cancel an open task")
+    cancel = commands.add_parser("cancel", help="cancel an open or review task")
     cancel.add_argument("task_id")
     cancel.add_argument("--reason", required=True)
+    review = commands.add_parser("review", help="move an open task into review")
+    review.add_argument("task_id")
+    reopen = commands.add_parser("reopen", help="return a review task to open")
+    reopen.add_argument("task_id")
     commands.add_parser("archive", help="enforce Done retention")
+    commands.add_parser("migrate", help="upgrade the task data format")
 
     repos = commands.add_parser("repos", help="manage the repository collection")
     operations = repos.add_subparsers(

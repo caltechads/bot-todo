@@ -17,6 +17,7 @@ EXPECTED = """\
 - Use the `bot-todo` CLI with `--json` for all agent mutations; never hand-edit `TODO.md`.
 - Run `bot-todo --json validate` before and after task-file changes.
 - Claim a task before planning or implementing it.
+- When work is finished but still needs validation, move the task to review before completing it.
 - When specs, ADRs, or plans are written to the filesystem, add a link to the files in the corresponding TODO task.
 """
 
@@ -49,7 +50,7 @@ class SnippetCommandTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         document = json.loads(result.stdout)
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
         self.assertEqual(document["command"], "snippet")
         self.assertEqual(document["data"], {"snippet": EXPECTED.rstrip("\n")})
 

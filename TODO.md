@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 1; next-id: 15 -->
+<!-- todo-format: 2; next-id: 15 -->
 
 ## P0 — Critical / Blocking
 
@@ -16,12 +16,14 @@
   - Acceptance: Done when a NiceGUI Kanban board can browse and mutate tasks in a Task Repository through bot-todo's existing core rather than by hand-editing TODO.md, covering at least list, show, add, and complete, with columns that reflect task state.
   - Context: The CLI remains the programmatic interface. The UI is a human-facing Kanban frontend over the same Task Repository model.
 
-- [ ] **T011** Add a review state for work that needs validation #feature
-  - Acceptance: Done when a task can move into a review state that means the work is finished but still needs validation, then be completed or returned to open from that state, with CLI, JSON, and the todo skill documenting the new state.
-  - Context: Today a task is open, claimed, completed, or cancelled. Review sits between claimed and completed so validation can happen before Outcome completed. Related Kanban work: T010.
-  - Related: T010
-
 ## Done (recent)
+
+- [x] **T011** Add a review state for work that needs validation #feature
+  - Acceptance: Done when a task can move into a review state that means the work is finished but still needs validation, then be completed or returned to open from that state, with CLI, JSON, and the todo skill documenting the new state.
+  - Context: Today a task is open, completed, or cancelled. Review sits between opened and completed so validation can happen before Outcome completed. Related Kanban work: T010. Plan: .scratch/review-state/plan.md ADR: docs/adr/0006-review-is-an-in-section-lifecycle-state.md Glossary: CONTEXT.md
+  - Related: T010
+  - Outcome: completed
+  - Closed: 2026-08-17
 
 - [x] **T012** Require claiming a task before planning or implementing #docs
   - Acceptance: Done when the AGENTS.md Task Management text tells agents to claim a task before planning or implementing it, and the T009 snippet draft matches that rule if it is still the canonical copy-paste text.

@@ -276,17 +276,19 @@ class FormatVersionTests(TodoCliTestCase):
     def test_an_unsupported_format_version_is_rejected(self) -> None:
         todo_path = self.root / "TODO.md"
         todo_path.write_text(
-            todo_path.read_text().replace("todo-format: 1", "todo-format: 2")
+            todo_path.read_text().replace("todo-format: 2", "todo-format: 3")
         )
 
         with self.assertRaises(TodoError) as caught:
             TodoStore(self.root).snapshot()
 
         self.assertEqual(caught.exception.code, "unsupported_format_version")
+        self.assertEqual(caught.exception.details["encountered"], 3)
+        self.assertEqual(caught.exception.details["supported"], [1, 2])
 
     def test_an_unsupported_format_version_blocks_mutation(self) -> None:
         todo_path = self.root / "TODO.md"
-        original = todo_path.read_text().replace("todo-format: 1", "todo-format: 2")
+        original = todo_path.read_text().replace("todo-format: 2", "todo-format: 3")
         todo_path.write_text(original)
 
         result = self.run_cli(
@@ -322,7 +324,7 @@ class CompatibilityTests(unittest.TestCase):
         "  - Closed: 2024-01-02\n"
     )
 
-    def test_a_legacy_pair_loads_and_mutates_without_migration(self) -> None:
+    def test_a_legacy_pair_loads_and_requires_migrate_to_mutate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "TODO.md").write_text(self.LEGACY_TODO)
@@ -334,13 +336,24 @@ class CompatibilityTests(unittest.TestCase):
             assert actionable is not None
             self.assertEqual(actionable.task_id, "T002")
 
+            with self.assertRaises(TodoError) as caught, store.transaction() as transaction:
+                transaction.add(
+                    title="Newly added",
+                    priority="P2",
+                    task_type="bug",
+                    simple=True,
+                )
+            self.assertEqual(caught.exception.code, "migration_required")
+
             with store.transaction() as transaction:
+                transaction.migrate()
                 added = transaction.add(
                     title="Newly added", priority="P2", task_type="bug", simple=True
                 )
 
             self.assertEqual(added.task_id, "T003")
             self.assertIn("next-id: 4", (root / "TODO.md").read_text())
+            self.assertIn("todo-format: 2", (root / "TODO.md").read_text())
 
     def test_noncanonical_field_order_is_accepted_and_rewritten(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -354,6 +367,7 @@ class CompatibilityTests(unittest.TestCase):
             store = TodoStore(root)
 
             with store.transaction() as transaction:
+                transaction.migrate()
                 transaction.edit("T002", title="Renamed")
 
             rewritten = (root / "TODO.md").read_text()
@@ -377,7 +391,7 @@ class CompatibilityTests(unittest.TestCase):
             self.assertRegex(
                 (root / "TODO.md").read_text(),
                 re.compile(
-                    r"\A# TODO — Layout\n<!-- todo-format: 1; next-id: 2 -->\n\n"
+                    r"\A# TODO — Layout\n<!-- todo-format: 2; next-id: 2 -->\n\n"
                     r"## P0 — Critical / Blocking\n\n"
                     r"## P1 — High Priority\n\n"
                     r"- \[ \] \*\*T001\*\* Canonical #docs #simple\n\n"

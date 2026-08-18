@@ -79,17 +79,20 @@ bot-todo [--json] [--config PATH] [--root PATH | --repo NAME | --all] COMMAND ..
 | --- | --- |
 | `init [--name NAME]` | Create `TODO.md` and `TODO.archive.md` |
 | `validate` | Check the canonical files |
-| `list` | List open tasks |
+| `list` | List open and review tasks |
 | `show TASK_ID` | Print one task |
 | `critical` | Highest-priority open task (even if blocked or claimed) |
 | `actionable` | First unclaimed open task whose blockers are completed |
 | `add TITLE --type TYPE` | Create an open task |
-| `edit TASK_ID ...` | Change an open task |
-| `claim TASK_ID --actor NAME` | Take an advisory claim |
+| `edit TASK_ID ...` | Change an open or review task |
+| `claim TASK_ID --actor NAME` | Take an advisory claim on an open task |
 | `release TASK_ID` | Drop a claim |
-| `complete TASK_ID` | Mark a task completed |
-| `cancel TASK_ID --reason TEXT` | Mark a task cancelled |
+| `review TASK_ID` | Move an open task into review |
+| `reopen TASK_ID` | Return a review task to open |
+| `complete TASK_ID` | Mark an open or review task completed |
+| `cancel TASK_ID --reason TEXT` | Mark an open or review task cancelled |
 | `archive` | Move older Done tasks into the archive |
+| `migrate` | Upgrade the task data format to 2 |
 | `repos path` | Show the active configuration path |
 | `repos list` | List configured repositories |
 | `repos add [PATH]` | Add a repository entry; PATH defaults to `.` |
@@ -103,7 +106,12 @@ Task IDs look like `T001` and are never reused. Types are `bug`, `chore`,
 
 `add` requires either `--acceptance` or `--simple`. Repeatable options are
 `--tag` and `--blocked-by`. `claim` records the actor, today's date, and the
-current Git branch unless `--branch` is given.
+current Git branch unless `--branch` is given. `review` clears that claim and
+records today's date; `reopen` returns the task to open. `complete` and
+`cancel` accept open or review tasks.
+
+`init` writes Task Data Format 2. Format 1 files still load for queries;
+mutations require `bot-todo migrate` first.
 
 ```bash
 bot-todo add "Fix the lock timeout" --type bug --priority P0 \
@@ -195,7 +203,7 @@ Success writes one JSON document to stdout:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "command": "list",
   "data": {
     "tasks": []
@@ -203,11 +211,15 @@ Success writes one JSON document to stdout:
 }
 ```
 
+JSON task objects include `state` (`open`, `review`, `completed`, or
+`cancelled`), `reviewed_on` (an ISO date while in Review, otherwise `null`),
+and `closed_on`.
+
 Expected failure writes nothing to stdout and one error document to stderr:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "error": {
     "code": "unknown_task",
     "message": "unknown task ID T999"

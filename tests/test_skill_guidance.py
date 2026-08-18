@@ -78,3 +78,7 @@ class SkillGuidanceTests(unittest.TestCase):
             self.text,
             re.compile(r"Do not write\s+those files unless asked", re.DOTALL),
         )
+
+    def test_skill_documents_review_and_migrate(self) -> None:
+        self.assertIn("`review`", self.text)
+        self.assertIn("`migrate`", self.text)

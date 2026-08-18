@@ -56,6 +56,14 @@ An ordinary label on a Task. It is not the classifying type and not the
 `simple` marker.
 _Avoid_: Type, hashtag, label, keyword
 
+**Task State**:
+One of open, review, completed, or cancelled.
+_Avoid_: Status
+
+**Review**:
+The Task State of a Task whose work is finished but not yet accepted as completed.
+_Avoid_: In review, needs review, needs validation
+
 **Critical Task**:
 The highest-priority open task, whether or not it can currently be acted upon.
 _Avoid_: Next task

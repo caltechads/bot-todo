@@ -31,8 +31,10 @@ LOCK_FILENAME = ".bot-todo.lock"
 LOCK_TIMEOUT_SECONDS = 5.0
 #: Interval between lock acquisition attempts in seconds.
 LOCK_CHECK_INTERVAL_SECONDS = 0.05
-#: Only task data format version this release understands.
-SUPPORTED_FORMAT_VERSION = 1
+#: Task Data Format versions this release can read.
+READABLE_FORMAT_VERSIONS = frozenset({1, 2})
+#: Task Data Format version this release writes.
+WRITE_FORMAT_VERSION = 2
 #: Supported task type tags.
 TYPE_TAGS = {"bug", "chore", "docs", "feature", "ops"}
 #: Marker tag for a task that deliberately carries no acceptance criteria.
@@ -68,6 +70,7 @@ FIELD_ORDER = (
     "Related",
     "Blocked by",
     "Claimed",
+    "Review",
     "Outcome",
     "Closed",
     "Reason",
@@ -161,12 +164,14 @@ class Task:
         Report the task lifecycle state.
 
         Returns:
-            One of ``open``, ``completed``, or ``cancelled``.
+            One of ``open``, ``review``, ``completed``, or ``cancelled``.
 
         """
-        if not self.checked:
-            return "open"
-        return self.fields.get("Outcome", "completed")
+        if self.checked:
+            return self.fields.get("Outcome", "completed")
+        if "Review" in self.fields:
+            return "review"
+        return "open"
 
     @property
     def task_type(self) -> str | None:
@@ -246,6 +251,17 @@ class Task:
         return self.fields.get("Closed")
 
     @property
+    def reviewed_on(self) -> str | None:
+        """
+        Report the date the task entered Review.
+
+        Returns:
+            ISO calendar date, or ``None`` when the task is not in Review.
+
+        """
+        return self.fields.get("Review")
+
+    @property
     def reason(self) -> str | None:
         """
         Report the cancellation reason.
@@ -316,6 +332,7 @@ class TodoDocument:
         next_id: Next unallocated numeric task identifier.
         active: Active tasks grouped by priority.
         done: Recently closed tasks, newest first.
+        format_version: Declared Task Data Format version.
 
     """
 
@@ -327,6 +344,8 @@ class TodoDocument:
     active: dict[str, list[Task]]
     #: Recently closed tasks, newest first.
     done: list[Task]
+    #: Declared Task Data Format version.
+    format_version: int
 
     @property
     def tasks(self) -> list[Task]:
@@ -353,7 +372,7 @@ class TodoDocument:
         lines = [
             f"# TODO — {self.project}",
             (
-                f"<!-- todo-format: {SUPPORTED_FORMAT_VERSION};"
+                f"<!-- todo-format: {self.format_version};"
                 f" next-id: {self.next_id} -->"
             ),
             "",
@@ -629,6 +648,39 @@ class RepositoryTransaction:
         #: Tasks retired from Done and owed to the archive at commit.
         self._retired: list[Task] = []
 
+    def _require_writable_format(self) -> None:
+        """
+        Require Task Data Format 2 before mutating.
+
+        Raises:
+            TodoError: If the loaded document is not the write format.
+
+        """
+        if self.document.format_version != WRITE_FORMAT_VERSION:
+            raise TodoError(
+                (
+                    f"task data format {self.document.format_version} cannot "
+                    "be mutated; run bot-todo migrate"
+                ),
+                "migration_required",
+                {
+                    "encountered": self.document.format_version,
+                    "required": WRITE_FORMAT_VERSION,
+                },
+            )
+
+    def migrate(self) -> tuple[int, int]:
+        """
+        Set the document's Task Data Format to the write version.
+
+        Returns:
+            Encountered version and write version (equal when already current).
+
+        """
+        encountered = self.document.format_version
+        self.document.format_version = WRITE_FORMAT_VERSION
+        return encountered, WRITE_FORMAT_VERSION
+
     def add(
         self,
         *,
@@ -663,6 +715,7 @@ class RepositoryTransaction:
             TodoError: If neither acceptance criteria nor ``simple`` is given.
 
         """
+        self._require_writable_format()
         if not acceptance and not simple:
             raise TodoError("add requires --acceptance or --simple", "usage")
         task_tags = [task_type, *_normalize_tags(tags or [])]
@@ -730,6 +783,7 @@ class RepositoryTransaction:
             TodoError: If the task is closed or a type tag is removed directly.
 
         """
+        self._require_writable_format()
         task = self._find_active(task_id)
         if task.checked or task.priority is None:
             raise TodoError("closed tasks cannot be edited", "invalid_transition")
@@ -788,8 +842,9 @@ class RepositoryTransaction:
             TodoError: If the task is closed or already claimed.
 
         """
+        self._require_writable_format()
         task = self._find_active(task_id)
-        _require_open(task)
+        _require_state(task, "open")
         if "Claimed" in task.fields:
             raise TodoError(f"{task_id} is already claimed", "invalid_transition")
         branch_name = branch or _current_branch(self.store.root)
@@ -813,11 +868,53 @@ class RepositoryTransaction:
             TodoError: If the task is closed or unclaimed.
 
         """
+        self._require_writable_format()
         task = self._find_active(task_id)
-        _require_open(task)
+        _require_state(task, "open")
         if "Claimed" not in task.fields:
             raise TodoError(f"{task_id} is not claimed", "invalid_transition")
         task.fields.pop("Claimed")
+        return task
+
+    def review(self, task_id: str) -> Task:
+        """
+        Move an open task into Review.
+
+        Args:
+            task_id: Task to mark as awaiting validation.
+
+        Returns:
+            Task now in Review.
+
+        Raises:
+            TodoError: If the task is not open.
+
+        """
+        self._require_writable_format()
+        task = self._find_active(task_id)
+        _require_state(task, "open")
+        task.fields.pop("Claimed", None)
+        task.fields["Review"] = date.today().isoformat()
+        return task
+
+    def reopen(self, task_id: str) -> Task:
+        """
+        Return a Review task to open.
+
+        Args:
+            task_id: Task to return to open.
+
+        Returns:
+            Open task.
+
+        Raises:
+            TodoError: If the task is not in Review.
+
+        """
+        self._require_writable_format()
+        task = self._find_active(task_id)
+        _require_state(task, "review")
+        task.fields.pop("Review")
         return task
 
     def close(self, task_id: str, outcome: str, reason: str | None = None) -> Task:
@@ -836,8 +933,9 @@ class RepositoryTransaction:
             TodoError: If the task is closed or a cancellation lacks a reason.
 
         """
+        self._require_writable_format()
         task = self._find_active(task_id)
-        _require_open(task)
+        _require_not_closed(task)
         if outcome == "cancelled" and not reason:
             raise TodoError("cancellation requires a reason", "invalid_transition")
         if task.priority is None:
@@ -846,6 +944,7 @@ class RepositoryTransaction:
         task.priority = None
         task.checked = True
         task.fields.pop("Claimed", None)
+        task.fields.pop("Review", None)
         task.fields["Outcome"] = outcome
         task.fields["Closed"] = date.today().isoformat()
         if reason:
@@ -862,6 +961,7 @@ class RepositoryTransaction:
             Number of tasks retired by this call.
 
         """
+        self._require_writable_format()
         retired = _archive_overflow(self.document)
         self._retired.extend(retired)
         return len(retired)
@@ -987,6 +1087,7 @@ class TodoStore:
                 next_id=1,
                 active={priority: [] for priority in PRIORITY_HEADINGS},
                 done=[],
+                format_version=WRITE_FORMAT_VERSION,
             )
             _write_document(self.todo_path, document.render())
 
@@ -1103,13 +1204,16 @@ def _parse_document(todo_text: str) -> TodoDocument:
     project = todo_lines[0].removeprefix("# TODO — ").strip()
     metadata = METADATA_RE.fullmatch(todo_lines[1])
     if not metadata:
-        raise TodoError("TODO.md:2 must declare todo-format 1 and next-id")
+        raise TodoError("TODO.md:2 must declare todo-format and next-id")
     version = int(metadata.group(1))
-    if version != SUPPORTED_FORMAT_VERSION:
+    if version not in READABLE_FORMAT_VERSIONS:
         raise TodoError(
             f"unsupported task data format version {version}",
             "unsupported_format_version",
-            {"encountered": version, "supported": [SUPPORTED_FORMAT_VERSION]},
+            {
+                "encountered": version,
+                "supported": sorted(READABLE_FORMAT_VERSIONS),
+            },
         )
     headings = [*PRIORITY_HEADINGS.values(), DONE_HEADING]
     indices: list[int] = []
@@ -1136,7 +1240,9 @@ def _parse_document(todo_text: str) -> TodoDocument:
             TODO_FILENAME,
         )
     done = _parse_task_lines(todo_lines[indices[-1] + 1 :], None, TODO_FILENAME)
-    return TodoDocument(project, int(metadata.group(2)), active, done)
+    return TodoDocument(
+        project, int(metadata.group(2)), active, done, format_version=version
+    )
 
 
 def _parse_task_lines(
@@ -1256,10 +1362,21 @@ def _validate_document(document: TodoDocument) -> None:
                 and "Reason" not in task.fields
             ):
                 raise TodoError(f"cancelled task {task.task_id} requires a Reason")
+            if "Review" in task.fields:
+                raise TodoError(f"closed task {task.task_id} has a Review field")
         elif task.checked:
             raise TodoError(f"active task {task.task_id} must be unchecked")
         elif "Outcome" in task.fields or "Closed" in task.fields:
             raise TodoError(f"active task {task.task_id} has terminal fields")
+        elif "Review" in task.fields:
+            if document.format_version != WRITE_FORMAT_VERSION:
+                raise TodoError(
+                    f"{task.task_id} has a Review field on task data format "
+                    f"{document.format_version}"
+                )
+            if "Claimed" in task.fields:
+                raise TodoError(f"{task.task_id} cannot be claimed while in Review")
+            _validate_date(task.task_id, "Review", task.fields["Review"])
     maximum = max((int(task.task_id[1:]) for task in document.tasks), default=0)
     if document.next_id <= maximum:
         raise TodoError(f"next-id must be greater than {maximum}")
@@ -1467,9 +1584,9 @@ def _optional_fields(candidates: Sequence[tuple[str, str | None]]) -> dict[str, 
     return {name: _require_text(value, name) for name, value in candidates if value}
 
 
-def _require_open(task: Task) -> None:
+def _require_not_closed(task: Task) -> None:
     """
-    Require an active task.
+    Require a task that is not completed or cancelled.
 
     Args:
         task: Task to inspect.
@@ -1480,6 +1597,22 @@ def _require_open(task: Task) -> None:
     """
     if task.checked or task.priority is None:
         raise TodoError(f"{task.task_id} is closed", "invalid_transition")
+
+
+def _require_state(task: Task, expected: str) -> None:
+    """
+    Require a task to be in one Task State.
+
+    Args:
+        task: Task to inspect.
+        expected: Required Task State.
+
+    Raises:
+        TodoError: If the task is in a different state.
+
+    """
+    if task.state != expected:
+        raise TodoError(f"{task.task_id} is {task.state}", "invalid_transition")
 
 
 def _require_regular_or_absent(path: Path) -> None:
@@ -1595,7 +1728,7 @@ def _is_actionable(document: TodoDocument, task: Task) -> bool:
         ``True`` when the task may be started now.
 
     """
-    if task.checked or "Claimed" in task.fields:
+    if task.state != "open" or "Claimed" in task.fields:
         return False
     # ponytail: rebuilds the index per call, so scanning a document is O(n^2);
     # hoist the index into the caller if a backlog ever grows large enough.
@@ -1619,7 +1752,8 @@ def _find_critical(document: TodoDocument) -> Task | None:
     """
     for priority in PRIORITY_HEADINGS:
         for task in document.active[priority]:
-            return task
+            if task.state == "open":
+                return task
     return None
 
 

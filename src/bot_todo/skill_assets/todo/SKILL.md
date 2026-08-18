@@ -1,6 +1,6 @@
 ---
 name: todo
-description: Use when a repository tracks work in canonical TODO.md files and an agent needs to inspect, select, add, edit, claim, complete, cancel, archive, or validate tasks.
+description: Use when a repository tracks work in canonical TODO.md files and an agent needs to inspect, select, add, edit, claim, complete, cancel, review, reopen, archive, migrate, or validate tasks.
 ---
 
 # Todo
@@ -29,6 +29,7 @@ current list looks empty. Mutations never accept `--all`.
 - **Task ID**: Repository-unique `T` plus at least three digits. Never reuse it.
 - **High-water mark**: `next-id` in the `TODO.md` metadata comment. Never lower it.
 - **Claim**: Advisory actor, date, and branch metadata on an open task.
+- **Review**: Task State for finished work awaiting validation. It is not a Claim.
 - **Closed task**: Checked task with a completed or cancelled outcome.
 - **Archive**: Append-only `TODO.archive.md` history of older closed tasks. It
   is written by the CLI, never read to decide whether a mutation is legal, and
@@ -48,6 +49,7 @@ bot-todo --json --root <repo> list
 bot-todo --json --root <repo> critical
 bot-todo --json --root <repo> actionable
 bot-todo --json --root <repo> show T001
+bot-todo --json --root <repo> migrate
 ```
 
 After a successful `init`, parse `data.snippet`. Show that Task Management
@@ -59,12 +61,14 @@ Before changing tasks, run `validate`. Stop and repair reported errors rather
 than editing around them. Use `--help` on the CLI or a subcommand for its exact
 arguments.
 
-Mutations follow the same shape; `edit`, `release`, and `archive` complete the
-set:
+Mutations follow the same shape; `edit`, `release`, `review`, `reopen`,
+`migrate`, and `archive` complete the set:
 
 ```bash
 bot-todo --json --root <repo> add "Title" --type bug --priority P1 --acceptance "Done when..."
 bot-todo --json --root <repo> claim T001 --actor codex
+bot-todo --json --root <repo> review T001
+bot-todo --json --root <repo> reopen T001
 bot-todo --json --root <repo> complete T001
 bot-todo --json --root <repo> cancel T001 --reason "Superseded"
 ```
@@ -84,10 +88,13 @@ bot-todo --json repos remove bot-todo
 
 Require exactly one type: `bug`, `chore`, `docs`, `feature`, or `ops`. Require
 acceptance criteria unless `--simple` deliberately marks a trivial task. Keep
-active tasks in P0/P1/P2; claims do not move tasks between sections. `critical`
-selects the highest-priority open task even when it is blocked or claimed;
-`actionable` selects the first unclaimed task whose blockers completed, in
-priority and file order.
+active tasks in P0/P1/P2; claims do not move tasks between sections. `list`
+includes Review tasks. `critical` selects the highest-priority open task even
+when it is blocked or claimed; `actionable` selects the first unclaimed open
+task whose blockers completed, in priority and file order. Review does not
+satisfy blockers. Format 1 repositories must `migrate` before any mutation.
+When work is finished but still needs validation, `review` it; `reopen` returns
+it to open. `complete` and `cancel` are legal from open or Review.
 
 `--json` emits one machine-readable document on stdout; an expected failure
 writes one error document to stderr instead.

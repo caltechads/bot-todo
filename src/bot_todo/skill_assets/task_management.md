@@ -5,4 +5,5 @@
 - Use the `bot-todo` CLI with `--json` for all agent mutations; never hand-edit `TODO.md`.
 - Run `bot-todo --json validate` before and after task-file changes.
 - Claim a task before planning or implementing it.
+- When work is finished but still needs validation, move the task to review before completing it.
 - When specs, ADRs, or plans are written to the filesystem, add a link to the files in the corresponding TODO task.

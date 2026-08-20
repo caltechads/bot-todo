@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import html
 import re
 import secrets
@@ -85,6 +86,7 @@ class KanbanWebApp:
 
         Raises:
             ValueError: If the port is outside the TCP port range.
+            TodoError: If the requested loopback port is already in use.
 
         Side Effects:
             Binds a loopback TCP socket.
@@ -92,7 +94,23 @@ class KanbanWebApp:
         if not 0 <= port <= 65535:
             raise ValueError("port must be between 0 and 65535")
         handler = partial(KanbanRequestHandler, app=self)
-        server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+        try:
+            server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+        except OSError as error:
+            in_use = {errno.EADDRINUSE}
+            winsock_in_use = getattr(errno, "WSAEADDRINUSE", None)
+            if winsock_in_use is not None:
+                in_use.add(winsock_in_use)
+            if error.errno not in in_use:
+                raise
+            raise TodoError(
+                (
+                    f"Kanban Board could not bind 127.0.0.1:{port} because that "
+                    "port is already in use. Retry with --port PORT, or --port 0 "
+                    "to let the OS choose a free port."
+                ),
+                "io_error",
+            ) from error
         server.daemon_threads = True
         self.origin = f"http://127.0.0.1:{server.server_port}"
         return server

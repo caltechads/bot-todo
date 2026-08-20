@@ -47,6 +47,34 @@ never writes those instruction files. Other commands without a selector walk
 from the current directory toward the filesystem root and use the nearest
 `TODO.md`.
 
+### Getting started with agents
+
+Install the bundled todo skill for the agent you use:
+
+```bash
+bot-todo install-skill --target cursor
+```
+
+The other targets are `claude`, `grok`, and `codex`. See [Agent skill](#agent-skill)
+for destinations, `--dry-run`, and `--force`.
+
+Copy the Task Management Snippet into `AGENTS.md` or `CLAUDE.md`:
+
+```bash
+bot-todo snippet
+```
+
+`bot-todo` never writes those files. Successful `init` already prints the same
+text; `snippet` retrieves it later. Paste the printed markdown yourself.
+
+Agents pass `--json` on every command that returns data. See
+[JSON output](#json-output) for the envelope.
+
+```bash
+bot-todo --json list
+bot-todo --json claim T001 --actor cursor
+```
+
 ## Usage
 
 Global options precede the command:

@@ -28,6 +28,7 @@ from bot_todo.repository import (
 )
 from bot_todo.skill_installation import TARGET_ROOTS, SkillInstaller
 from bot_todo.task_management_snippet import TaskManagementSnippet
+from bot_todo.web import run_web
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -1456,6 +1457,27 @@ def _json_requested(argv: Sequence[str]) -> bool:
     return False
 
 
+def _port(value: str) -> int:
+    """Parse one TCP port argument.
+
+    Args:
+        value: Decimal port text.
+
+    Returns:
+        Port number from zero through 65535.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not a valid TCP port.
+    """
+    try:
+        port = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("port must be an integer") from error
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 0 and 65535")
+    return port
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """
     Build the public command-line parser.
@@ -1544,6 +1566,11 @@ def _build_parser() -> argparse.ArgumentParser:
     reopen.add_argument("task_id")
     commands.add_parser("archive", help="enforce Done retention")
     commands.add_parser("migrate", help="upgrade the task data format")
+    web = commands.add_parser("web", help="serve a local Kanban Board")
+    web.add_argument("--port", type=_port, default=8765, help="loopback TCP port")
+    web.add_argument(
+        "--no-open", action="store_true", help="do not open the default browser"
+    )
 
     repos = commands.add_parser("repos", help="manage the repository collection")
     operations = repos.add_subparsers(
@@ -1596,6 +1623,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE
     writer = OutputWriter(json_mode=arguments.json)
     try:
+        if arguments.command == "web" and arguments.json:
+            raise TodoError("web does not support --json", "usage")
         selector = RepositorySelector(
             arguments.root, arguments.repo, arguments.all, arguments.config
         )
@@ -1606,6 +1635,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             outcome = _snippet()
         elif arguments.command == "repos":
             outcome = CollectionRunner(selector.explicit_path()).run(arguments)
+        elif arguments.command == "web":
+            selected = selector.select(arguments.command)
+            run_web(
+                selected.store,
+                name=selected.name,
+                port=arguments.port,
+                open_browser=not arguments.no_open,
+            )
+            return 0
         elif arguments.all:
             outcome = AggregateRunner(selector.collection()).run(arguments.command)
         else:

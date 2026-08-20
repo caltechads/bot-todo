@@ -552,6 +552,46 @@ class SelectionTests(TodoCliTestCase):
         self.assertNotEqual(failure.stderr, "")
 
 
+class WebCommandTests(TodoCliTestCase):
+    """Verify the human-only single-repository web command contract."""
+
+    def test_web_rejects_aggregate_and_json_modes(self) -> None:
+        """Catch web accidentally entering aggregate or machine-output flows."""
+        aggregate = invoke("--all", "web", "--no-open")
+        machine = invoke(
+            "--json", "--root", str(self.root), "web", "--no-open"
+        )
+
+        self.assertEqual(aggregate.returncode, 2)
+        self.assertIn("--all does not support web", aggregate.stderr)
+        self.assertEqual(machine.returncode, 2)
+        self.assertEqual(json.loads(machine.stderr)["error"]["code"], "usage")
+        self.assertIn("web does not support --json", machine.stderr)
+
+    @mock.patch("bot_todo.cli.run_web")
+    def test_web_selects_one_repository_and_passes_launch_options(
+        self, run_web: mock.Mock
+    ) -> None:
+        """Catch CLI dispatch that loses repository, port, or browser options."""
+        result = self.run_cli("web", "--port", "0", "--no-open")
+
+        self.assertEqual(result.returncode, 0)
+        store = run_web.call_args.args[0]
+        self.assertEqual(store.root, self.root)
+        self.assertEqual(
+            run_web.call_args.kwargs,
+            {"name": None, "port": 0, "open_browser": False},
+        )
+
+    def test_web_rejects_a_port_outside_the_tcp_range(self) -> None:
+        """Catch invalid numeric ports reaching socket binding."""
+        for port in ("-1", "65536"):
+            with self.subTest(port=port):
+                result = self.run_cli("web", "--port", port, "--no-open", check=False)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("port must be between 0 and 65535", result.stderr)
+
+
 class QueryTests(TodoCliTestCase):
     """Cover the settled critical and actionable query semantics."""
 

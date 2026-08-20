@@ -22,6 +22,10 @@ Its identity is its resolved filesystem directory; separate Git worktrees are
 separate Task Repositories. A configured Task Repository may also have a name.
 _Avoid_: Project, source repository
 
+**Kanban Board**:
+The local human-facing view of one Task Repository, grouped by Task State.
+_Avoid_: Web frontend, web UI, task dashboard
+
 **Repository Name**:
 A unique lowercase slug that identifies a Repository Entry.
 _Avoid_: Project name, repository alias

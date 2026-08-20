@@ -78,6 +78,7 @@ bot-todo [--json] [--config PATH] [--root PATH | --repo NAME | --all] COMMAND ..
 | `cancel TASK_ID --reason TEXT` | Mark an open or review task cancelled |
 | `archive` | Move older Done tasks into the archive |
 | `migrate` | Upgrade the task data format to 2 |
+| `web [--port PORT] [--no-open]` | Serve one repository as a local Kanban Board |
 | `repos path` | Show the active configuration path |
 | `repos list` | List configured repositories |
 | `repos add [PATH]` | Add a repository entry; PATH defaults to `.` |
@@ -109,6 +110,31 @@ bot-todo cancel T004 --reason "Superseded by T003"
 
 `edit` is a usage error if it requests no change. It also accepts `--simple`,
 `--clear-context`, `--clear-related`, and `--clear-blockers`.
+
+### Local Kanban Board
+
+Serve the selected Task Repository in a browser:
+
+```bash
+bot-todo web
+bot-todo --root ~/Programming/bot_todo web --port 8765 --no-open
+bot-todo --repo bot-todo web
+```
+
+The server binds only to `127.0.0.1`, prints its URL, and opens the default
+browser unless `--no-open` is supplied. Port `8765` is the default; port `0`
+asks the operating system to choose an available port. `web` manages one Task
+Repository and rejects `--all` and `--json`.
+
+The Kanban Board groups recent tasks into Open, Review, Completed, and
+Cancelled columns. It can add tasks, move Open work to Review, reopen Review
+work, and complete or cancel Open or Review work. Task editing, claims,
+full-archive browsing, and multi-repository boards remain CLI-only. A Task Data
+Format 1 repository is displayed read-only with instructions to run
+`bot-todo migrate`.
+
+This is a local human interface, not a remotely deployable service. It has no
+authentication and deliberately provides no option to bind beyond loopback.
 
 ### Selecting a repository
 

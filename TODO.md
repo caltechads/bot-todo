@@ -5,18 +5,21 @@
 
 ## P1 — High Priority
 
-- [ ] **T013** Prepare bot-todo for public deployment and deploy it #ops
+## P2 — Backlog
+
+- [ ] **T010** Add a Kanban web frontend #feature
+  - Acceptance: Done when a Kanban board can browse and mutate tasks in a Task Repository through bot-todo's existing core rather than by hand-editing TODO.md, covering at least list, show, add, and complete, with responsive Tabler-styled columns that reflect task state, an accessible modal creation flow, and pinned CDN assets protected by integrity metadata and a restrictive CSP.
+  - Context: The CLI remains the programmatic interface. The Kanban Board is a local human-facing frontend over the same Task Repository model. Spec: .scratch/kanban-web-frontend/spec.md Plan: .scratch/kanban-web-frontend/plan.md Design: .scratch/kanban-web-frontend/design-option-1.png ADRs: docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md and docs/adr/0008-use-pinned-tabler-assets-for-the-kanban-presentation.md QA: design-qa.md Glossary: CONTEXT.md
+  - Review: 2026-08-19
+
+## Done (recent)
+
+- [x] **T013** Prepare bot-todo for public deployment and deploy it #ops
   - Acceptance: Done when the package has the public-release metadata, license, and install docs required to ship, the distribution is published to PyPI, and a stranger can install and run bot-todo with uv tool install bot-todo (or the documented equivalent) without a checkout.
   - Context: README currently says the distribution is not on PyPI and documents checkout-only install. The wheel already installs and runs outside the checkout (T002, T003, T005). This task covers remaining release hygiene plus the actual publish.
   - Related: T003
-
-## P2 — Backlog
-
-- [ ] **T010** Add a NiceGUI Kanban web frontend #feature
-  - Acceptance: Done when a NiceGUI Kanban board can browse and mutate tasks in a Task Repository through bot-todo's existing core rather than by hand-editing TODO.md, covering at least list, show, add, and complete, with columns that reflect task state.
-  - Context: The CLI remains the programmatic interface. The UI is a human-facing Kanban frontend over the same Task Repository model.
-
-## Done (recent)
+  - Outcome: completed
+  - Closed: 2026-08-18
 
 - [x] **T011** Add a review state for work that needs validation #feature
   - Acceptance: Done when a task can move into a review state that means the work is finished but still needs validation, then be completed or returned to open from that state, with CLI, JSON, and the todo skill documenting the new state.

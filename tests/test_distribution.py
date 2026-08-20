@@ -33,6 +33,7 @@ class WheelSmokeTests(unittest.TestCase):
             repository.mkdir()
 
             version = self._run([str(executable), "--version"])
+            web_help = self._run([str(executable), "web", "--help"])
             self._run([str(executable), "--root", str(repository), "init"])
             self._run(
                 [
@@ -58,6 +59,8 @@ class WheelSmokeTests(unittest.TestCase):
             )
 
             self.assertIn("bot-todo", version)
+            self.assertIn("--port", web_help)
+            self.assertIn("--no-open", web_help)
             self.assertIn("Installed task", listed)
             self.assertEqual(aggregated.strip(), "demo\nT001 P2 Installed task #chore")
             self.assertTrue((repository / "TODO.md").exists())

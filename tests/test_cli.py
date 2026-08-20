@@ -6,6 +6,7 @@ import contextlib
 import json
 import os
 import re
+import socket
 import tempfile
 import unittest
 from pathlib import Path
@@ -590,6 +591,30 @@ class WebCommandTests(TodoCliTestCase):
                 result = self.run_cli("web", "--port", port, "--no-open", check=False)
                 self.assertEqual(result.returncode, 2)
                 self.assertIn("port must be between 0 and 65535", result.stderr)
+
+    def test_web_reports_an_occupied_port_without_a_traceback(self) -> None:
+        """Catch an occupied --port surfacing as a raw OSError or traceback."""
+        holder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            holder.bind(("127.0.0.1", 0))
+            holder.listen(1)
+            port = str(holder.getsockname()[1])
+            result = self.run_cli(
+                "web", "--port", port, "--no-open", check=False
+            )
+        finally:
+            holder.close()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertNotIn("OSError", result.stderr)
+        self.assertNotIn("Address already in use", result.stderr)
+        self.assertIn(f"127.0.0.1:{port}", result.stderr)
+        self.assertIn("Kanban Board could not bind", result.stderr)
+        self.assertIn("already in use", result.stderr)
+        self.assertIn("--port PORT", result.stderr)
+        self.assertIn("--port 0", result.stderr)
 
 
 class QueryTests(TodoCliTestCase):

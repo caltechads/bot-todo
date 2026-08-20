@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import http.client
 import io
+import socket
 import threading
 from http.server import ThreadingHTTPServer
 from unittest import mock
 from urllib.parse import urlencode
 
-from bot_todo.repository import TodoStore
+from bot_todo.repository import TodoError, TodoStore
 from bot_todo.web import KanbanWebApp, run_web
 from tests.support import TodoCliTestCase
 
@@ -877,6 +879,42 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(status, 409)
         self.assertIn("Conflict", body)
         self.assertEqual(self.store.snapshot().document.tasks, [])
+
+    def test_create_server_reports_an_occupied_port(self) -> None:
+        """Catch a raw OSError when the requested loopback port is already bound."""
+        holder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            holder.bind(("127.0.0.1", 0))
+            holder.listen(1)
+            port = holder.getsockname()[1]
+            with self.assertRaises(TodoError) as raised:
+                self.app.create_server(port)
+        finally:
+            holder.close()
+
+        error = raised.exception
+        self.assertEqual(error.code, "io_error")
+        self.assertEqual(
+            str(error),
+            (
+                f"Kanban Board could not bind 127.0.0.1:{port} because that "
+                "port is already in use. Retry with --port PORT, or --port 0 "
+                "to let the OS choose a free port."
+            ),
+        )
+        self.assertNotIn("Traceback", str(error))
+        self.assertNotIn("OSError", str(error))
+
+    def test_create_server_does_not_rewrite_other_bind_errors(self) -> None:
+        """Catch EADDRINUSE handling that swallows unrelated bind failures."""
+        with mock.patch(
+            "bot_todo.web.ThreadingHTTPServer",
+            side_effect=OSError(errno.EACCES, "Permission denied"),
+        ):
+            with self.assertRaises(OSError) as raised:
+                self.app.create_server(80)
+
+        self.assertEqual(raised.exception.errno, errno.EACCES)
 
     def test_run_web_prints_and_opens_the_actual_bound_url(self) -> None:
         """Catch launch behavior that opens before bind or loses port zero."""

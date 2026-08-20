@@ -127,11 +127,11 @@ asks the operating system to choose an available port. `web` manages one Task
 Repository and rejects `--all` and `--json`.
 
 The Kanban Board groups recent tasks into Open, Review, Completed, and
-Cancelled columns. It can add tasks, move Open work to Review, reopen Review
-work, and complete or cancel Open or Review work. Task editing, claims,
-full-archive browsing, and multi-repository boards remain CLI-only. A Task Data
-Format 1 repository is displayed read-only with instructions to run
-`bot-todo migrate`.
+Cancelled columns. Card titles open that task's details in a modal. It can
+add tasks, move Open work to Review, reopen Review work, and complete or
+cancel Open or Review work. Task editing, claims, full-archive browsing, and
+multi-repository boards remain CLI-only. A Task Data Format 1 repository is
+displayed read-only with instructions to run `bot-todo migrate`.
 
 This is a local human interface, not a remotely deployable service. It has no
 authentication and deliberately provides no option to bind beyond loopback.

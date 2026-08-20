@@ -72,6 +72,29 @@ class KanbanWebTests(TodoCliTestCase):
         connection.close()
         return response.status, headers, body
 
+    def _task_modal(self, body: str, task_id: str) -> str:
+        """Return the HTML for one task-detail modal.
+
+        Args:
+            body: Board HTML document.
+            task_id: Task whose modal should be extracted.
+
+        Returns:
+            Modal markup from its opening ``div`` through the next modal or board.
+
+        Raises:
+            AssertionError: If the modal id is missing.
+        """
+        marker = f'<div class="modal modal-blur fade" id="task-{task_id}-modal"'
+        self.assertIn(marker, body)
+        start = body.index(marker)
+        rest = body[start + len(marker) :]
+        next_modal = rest.find('<div class="modal modal-blur')
+        next_board = rest.find('<div class="board-columns"')
+        cuts = [offset for offset in (next_modal, next_board) if offset != -1]
+        end_offset = min(cuts) if cuts else len(rest)
+        return body[start : start + len(marker) + end_offset]
+
     def post(
         self, path: str, fields: dict[str, str]
     ) -> tuple[int, dict[str, str], str]:
@@ -125,8 +148,8 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertLess(body.index(reviewing.task_id), body.index(completed.task_id))
         self.assertLess(body.index(completed.task_id), body.index(cancelled.task_id))
 
-    def test_task_page_shows_canonical_details(self) -> None:
-        """Catch a detail route that omits persisted task fields."""
+    def test_board_shows_canonical_details_in_a_tabler_modal(self) -> None:
+        """Catch a board that omits persisted task fields or restores a detail page."""
         with self.store.transaction() as transaction:
             task = transaction.add(
                 title="Inspect details",
@@ -138,9 +161,32 @@ class KanbanWebTests(TodoCliTestCase):
                 related="T009",
             )
 
-        status, _, body = self.get(f"/tasks/{task.task_id}")
+        status, _, body = self.get("/")
 
         self.assertEqual(status, 200)
+        modal_id = f"task-{task.task_id}-modal"
+        title_id = f"{modal_id}-title"
+        self.assertIn(
+            f'<button type="button" class="task-title" data-bs-toggle="modal" '
+            f'data-bs-target="#{modal_id}">',
+            body,
+        )
+        self.assertNotIn(f'href="/tasks/{task.task_id}"', body)
+        modal = self._task_modal(body, task.task_id)
+        self.assertIn(f'class="modal modal-blur fade" id="{modal_id}"', modal)
+        self.assertIn(f'aria-labelledby="{title_id}"', modal)
+        self.assertIn(f'id="{title_id}"', modal)
+        self.assertIn(f"{task.task_id} — Inspect details", modal)
+        self.assertIn(
+            '<button type="button" class="btn-close" data-bs-dismiss="modal" '
+            'aria-label="Close">',
+            modal,
+        )
+        self.assertIn(
+            '<button type="button" class="btn btn-link" data-bs-dismiss="modal">'
+            "Close</button>",
+            modal,
+        )
         for value in (
             task.task_id,
             "Inspect details",
@@ -151,18 +197,36 @@ class KanbanWebTests(TodoCliTestCase):
             "Local operator",
             "T009",
         ):
-            self.assertIn(value, body)
+            self.assertIn(value, modal)
+        self.assertNotIn(f'action="/tasks/{task.task_id}/transition"', modal)
+        self.assertIn(f'action="/tasks/{task.task_id}/transition"', body)
+
+    def test_former_detail_route_returns_generic_not_found(self) -> None:
+        """Catch a leftover GET /tasks/<id> page for a task that is on the board."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Still on the board",
+                priority="P2",
+                task_type="chore",
+                simple=True,
+            )
+
+        status, _, body = self.get(f"/tasks/{task.task_id}")
+
+        self.assertEqual(status, 404)
+        self.assertIn("The requested page does not exist.", body)
+        self.assertNotIn("unknown task ID", body)
+        self.assertNotIn("Traceback", body)
 
     def test_every_html_surface_uses_the_shared_tabler_content_shell(self) -> None:
         """Catch detail and error responses falling outside the Tabler shell."""
         with self.store.transaction() as transaction:
-            task = transaction.add(
+            transaction.add(
                 title="Shell check", priority="P2", task_type="chore", simple=True
             )
 
         responses = (
             self.get("/"),
-            self.get(f"/tasks/{task.task_id}"),
             self.get("/missing"),
             self.get("/tasks/T999"),
             self.request("GET", "/", headers={"Host": "evil.example"}),
@@ -457,11 +521,12 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(self.store.snapshot().document.tasks, [])
 
     def test_unknown_task_returns_a_human_404(self) -> None:
-        """Catch repository lookup errors escaping as dropped connections."""
+        """Catch a restored detail lookup for an unknown task ID."""
         status, _, body = self.get("/tasks/T999")
 
         self.assertEqual(status, 404)
-        self.assertIn("unknown task ID T999", body)
+        self.assertIn("The requested page does not exist.", body)
+        self.assertNotIn("unknown task ID", body)
         self.assertNotIn("Traceback", body)
 
     def test_invalid_transitions_return_a_human_conflict(self) -> None:
@@ -779,18 +844,22 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertIn('class="btn btn-outline-danger btn-sm"', body)
         self.assertIn('class="ti ti-x"', body)
 
-    def test_detail_route_finds_a_task_retired_to_the_archive(self) -> None:
-        """Catch detail lookup that searches only the active task file."""
+    def test_archived_task_is_not_reachable_from_the_board(self) -> None:
+        """Catch a board that still addresses Tasks that left recent Done."""
         first_id = self.add_simple("Archived detail")
         self.run_cli("complete", first_id)
         for number in range(20):
             task_id = self.add_simple(f"Later task {number}")
             self.run_cli("complete", task_id)
 
-        status, _, body = self.get(f"/tasks/{first_id}")
+        status, _, body = self.get("/")
+        missing_status, _, missing_body = self.get(f"/tasks/{first_id}")
 
         self.assertEqual(status, 200)
-        self.assertIn("Archived detail", body)
+        self.assertNotIn("Archived detail", body)
+        self.assertNotIn(f'id="task-{first_id}-modal"', body)
+        self.assertEqual(missing_status, 404)
+        self.assertIn("The requested page does not exist.", missing_body)
 
     def test_repository_lock_conflict_returns_http_conflict(self) -> None:
         """Catch lock contention escaping as a dropped connection."""

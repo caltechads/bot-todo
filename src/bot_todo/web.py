@@ -128,6 +128,11 @@ class KanbanWebApp:
             self._render_column(heading, tasks, writable=writable)
             for heading, tasks in columns
         )
+        detail_modals = "".join(
+            self._render_task_detail_modal(task)
+            for _, tasks in columns
+            for task in tasks
+        )
         if writable:
             header_action = (
                 '<button class="btn btn-primary" type="button" data-bs-toggle="modal" '
@@ -142,7 +147,10 @@ class KanbanWebApp:
                 'aria-hidden="true"></i> This repository is read-only. '
                 "Run <code>bot-todo migrate</code> to enable board mutations.</p>"
             )
-        content = f'{mutation_area}<div class="board-columns">{columns_html}</div>'
+        content = (
+            f"{mutation_area}{detail_modals}"
+            f'<div class="board-columns">{columns_html}</div>'
+        )
         return self._page("Kanban Board", content, header_action=header_action)
 
     def render_not_found(self) -> str:
@@ -176,60 +184,6 @@ class KanbanWebApp:
             f"<p>{html.escape(message)}</p>"
             '<a class="btn btn-primary" href="/">Return to Kanban Board</a>'
             "</div></div>"
-        )
-        return self._page(title, content)
-
-    def render_task(self, task_id: str) -> str:
-        """Render one task's canonical details.
-
-        Side Effects:
-            Reads the selected Task Repository and may read its archive.
-
-        Args:
-            task_id: Task identifier to display.
-
-        Returns:
-            Complete task-detail HTML document.
-
-        Raises:
-            TodoError: If the task is unknown or repository data is invalid.
-        """
-        task = self.store.snapshot().find(task_id)
-        claim = task.claim
-        values = (
-            ("ID", task.task_id),
-            ("Title", task.title),
-            ("State", task.state),
-            ("Priority", task.priority),
-            ("Type", task.task_type),
-            ("Tags", ", ".join(task.user_tags)),
-            ("Simple", "yes" if task.simple else "no"),
-            ("Acceptance", task.acceptance),
-            ("Context", task.context),
-            ("Related", task.related),
-            ("Blocked by", ", ".join(task.blocked_by)),
-            (
-                "Claim",
-                None
-                if claim is None
-                else f"{claim.actor} | {claim.claimed_on} | {claim.branch}",
-            ),
-            ("Reviewed", task.reviewed_on),
-            ("Closed", task.closed_on),
-            ("Reason", task.reason),
-        )
-        details = "".join(
-            f'<dt class="col-sm-3 text-secondary">{html.escape(label)}</dt>'
-            f'<dd class="col-sm-9">{html.escape(value or "—")}</dd>'
-            for label, value in values
-        )
-        title = f"{task.task_id} — {task.title}"
-        content = (
-            '<div class="card"><div class="card-body">'
-            '<p><a href="/"><i class="ti ti-arrow-left" aria-hidden="true"></i> '
-            "Kanban Board</a></p>"
-            f'<h1 class="h2">{html.escape(title)}</h1>'
-            f'<dl class="row mb-0">{details}</dl></div></div>'
         )
         return self._page(title, content)
 
@@ -318,7 +272,9 @@ class KanbanWebApp:
         actions = self._render_actions(task) if writable else ""
         return (
             '<article class="card card-sm mb-2"><div class="card-body">'
-            f'<a class="task-title" href="/tasks/{task_id}"><strong>{task_id}</strong> {title}</a>'
+            f'<button type="button" class="task-title" data-bs-toggle="modal" '
+            f'data-bs-target="#task-{task_id}-modal"><strong>{task_id}</strong> '
+            f"{title}</button>"
             '<div class="mt-2"><span class="badge bg-blue-lt">'
             f"{html.escape(task.priority or task.state)}</span> "
             f'<span class="badge bg-secondary-lt">{html.escape(task.task_type or "untyped")}'
@@ -379,6 +335,61 @@ class KanbanWebApp:
             f'<h2 class="h3 mb-0"><i class="ti {icon} {color}" aria-hidden="true"></i> '
             f'{heading}</h2><span class="badge bg-secondary-lt">'
             f"{len(tasks)}</span></div>{cards}</section>"
+        )
+
+    def _render_task_detail_modal(self, task: Task) -> str:
+        """Render one read-only Tabler modal for a board-visible task.
+
+        Args:
+            task: Task whose canonical fields are displayed.
+
+        Returns:
+            Escaped modal markup matching the New task dismiss contract.
+        """
+        task_id = html.escape(task.task_id)
+        title = html.escape(task.title)
+        modal_id = f"task-{task_id}-modal"
+        title_id = f"{modal_id}-title"
+        claim = task.claim
+        values = (
+            ("ID", task.task_id),
+            ("Title", task.title),
+            ("State", task.state),
+            ("Priority", task.priority),
+            ("Type", task.task_type),
+            ("Tags", ", ".join(task.user_tags)),
+            ("Simple", "yes" if task.simple else "no"),
+            ("Acceptance", task.acceptance),
+            ("Context", task.context),
+            ("Related", task.related),
+            ("Blocked by", ", ".join(task.blocked_by)),
+            (
+                "Claim",
+                None
+                if claim is None
+                else f"{claim.actor} | {claim.claimed_on} | {claim.branch}",
+            ),
+            ("Reviewed", task.reviewed_on),
+            ("Closed", task.closed_on),
+            ("Reason", task.reason),
+        )
+        details = "".join(
+            f'<dt class="col-sm-3 text-secondary">{html.escape(label)}</dt>'
+            f'<dd class="col-sm-9">{html.escape(value or "—")}</dd>'
+            for label, value in values
+        )
+        heading = f"{task_id} — {title}"
+        return (
+            f'<div class="modal modal-blur fade" id="{modal_id}" tabindex="-1" '
+            f'aria-labelledby="{title_id}" aria-hidden="true">'
+            '<div class="modal-dialog modal-lg modal-dialog-centered">'
+            '<div class="modal-content"><div class="modal-header">'
+            f'<h2 class="modal-title" id="{title_id}">{heading}</h2>'
+            '<button type="button" class="btn-close" data-bs-dismiss="modal" '
+            'aria-label="Close"></button></div>'
+            f'<div class="modal-body"><dl class="row mb-0">{details}</dl></div>'
+            '<div class="modal-footer"><button type="button" class="btn btn-link" '
+            'data-bs-dismiss="modal">Close</button></div></div></div></div>'
         )
 
     def _render_add_form(self) -> str:
@@ -503,7 +514,7 @@ class KanbanWebApp:
             ".board-columns{display:grid;grid-template-columns:repeat(4,minmax(14rem,1fr));gap:1rem}"
             ".board-column{min-height:28rem;padding:1rem;border:1px solid var(--tblr-border-color);border-radius:var(--tblr-border-radius);background:var(--tblr-bg-surface-secondary)}"
             ".board-empty{display:grid;min-height:20rem;place-content:center;gap:.5rem;text-align:center}.board-empty .ti{font-size:2rem}"
-            ".task-title{color:var(--tblr-primary);font-weight:600}.actions{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.75rem}.terminal-overflow summary{color:var(--tblr-secondary);cursor:pointer;text-align:center}"
+            ".task-title{color:var(--tblr-primary);font-weight:600;border:0;background:transparent;padding:0;text-align:left;cursor:pointer}.actions{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.75rem}.terminal-overflow summary{color:var(--tblr-secondary);cursor:pointer;text-align:center}"
             "@media(max-width:1199px){.board-columns{grid-template-columns:repeat(2,minmax(14rem,1fr))}}"
             "@media(max-width:767px){.board-columns{grid-template-columns:1fr}.board-column{min-height:0}}"
             '</style></head><body><div class="page"><header class="navbar navbar-expand-md navbar-light py-3"><div class="container-xl"><a class="navbar-brand fs-2" href="/"><i class="ti ti-robot text-primary fs-2" aria-hidden="true"></i> bot-todo</a><span class="navbar-text border-start ps-3 ms-3 fs-3 d-none d-sm-inline">Kanban Board</span>'
@@ -555,9 +566,6 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 self._send_html(200, self.app.render_board())
-                return
-            if path.startswith("/tasks/") and "/" not in path.removeprefix("/tasks/"):
-                self._send_html(200, self.app.render_task(unquote(path[7:])))
                 return
         except TodoError as error:
             self._send_todo_error(error)

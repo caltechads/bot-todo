@@ -14,10 +14,11 @@ port 0 requests an ephemeral port. `web` rejects `--all` and `--json`.
 
 ## HTTP interface
 
-- `GET /` renders the add form and Open, Review, Completed, and Cancelled
-  columns from a fresh `RepositorySnapshot`.
-- `GET /tasks/{task_id}` uses `RepositorySnapshot.find()` and therefore keeps
-  known archived tasks directly addressable.
+- `GET /` renders the add form, Open, Review, Completed, and Cancelled
+  columns, and one server-rendered Tabler detail modal per board-visible
+  Task from a fresh `RepositorySnapshot`. Card titles open that modal.
+- `GET /tasks/{task_id}` returns the generic not-found page. Archive lookup
+  stays on CLI `show`.
 - `POST /tasks` maps the full add form to `RepositoryTransaction.add()`.
 - `POST /tasks/{task_id}/transition` maps `review`, `reopen`, `complete`, and
   `cancel` to the existing transaction methods. Cancel requires a reason.
@@ -46,7 +47,9 @@ medium widths, and one column on narrow screens. Every state column has an
 icon, text heading, count, and an icon-plus-text empty-state message. Completed
 and Cancelled columns show at most six cards initially, with the remainder in
 a native disclosure. The complete add form opens in a centered `modal-lg`.
-Task values are escaped, and state is conveyed with text as well as color.
+Each board-visible card title opens a matching read-only detail modal with
+the Task's canonical fields. Task values are escaped, and state is conveyed
+with text as well as color.
 
 Each POST requires a process-local CSRF token, an exact loopback Host and
 Origin, URL-encoded input, at most 32 fields, and at most 64 KiB. Responses
@@ -55,7 +58,8 @@ security policy permits jsDelivr only for remote styles, scripts, and fonts;
 `data:` images remain allowed for Tabler; and all other sources remain
 restricted.
 
-Unknown tasks return 404; malformed forms return 400; request trust failures
+Unknown paths, including former `GET /tasks/{task_id}` URLs, return 404;
+malformed forms return 400; request trust failures
 return 403; oversized bodies return 413; unsupported form media types return
 415. Repository and transition failures render concise human error pages
 without tracebacks.

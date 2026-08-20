@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 15 -->
+<!-- todo-format: 2; next-id: 17 -->
 
 ## P0 — Critical / Blocking
 
@@ -7,12 +7,25 @@
 
 ## P2 — Backlog
 
-- [ ] **T010** Add a Kanban web frontend #feature
-  - Acceptance: Done when a Kanban board can browse and mutate tasks in a Task Repository through bot-todo's existing core rather than by hand-editing TODO.md, covering at least list, show, add, and complete, with responsive Tabler-styled columns that reflect task state, an accessible modal creation flow, and pinned CDN assets protected by integrity metadata and a restrictive CSP.
-  - Context: The CLI remains the programmatic interface. The Kanban Board is a local human-facing frontend over the same Task Repository model. Spec: .scratch/kanban-web-frontend/spec.md Plan: .scratch/kanban-web-frontend/plan.md Design: .scratch/kanban-web-frontend/design-option-1.png ADRs: docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md and docs/adr/0008-use-pinned-tabler-assets-for-the-kanban-presentation.md QA: design-qa.md Glossary: CONTEXT.md
-  - Review: 2026-08-19
+- [ ] **T015** Show the Kanban task detail view in a modal #feature
+  - Acceptance: Done when clicking a task card on the Kanban board opens its detail in an accessible Tabler modal, matching the New task modal's dismissal and focus behavior, and the standalone /tasks/<id> page is removed along with its route, render, and tests; tests cover the modal detail markup and that /tasks/<id> now returns 404.
+  - Context: The New task flow already uses a Tabler modal (KanbanWebApp._render_add_form in src/bot_todo/web.py); the detail view is a separate page render (render_task, plus the /tasks/<id> branch of do_GET), which is a jarring inconsistency. The modal is the only detail surface, so the detail markup must be rendered into the board response rather than fetched. Follows T010. Spec: .scratch/kanban-web-frontend/spec.md Plan: .scratch/kanban-web-frontend/t015-detail-modal-plan.md ADR: docs/adr/0009-kanban-task-detail-lives-in-a-board-modal.md Related presentation: docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md and docs/adr/0008-use-pinned-tabler-assets-for-the-kanban-presentation.md Glossary: CONTEXT.md
+  - Related: T010
+  - Review: 2026-08-20
+
+- [ ] **T016** Allow edits in the Kanban task detail modal #feature
+  - Acceptance: Done when the Kanban task detail modal can edit an open or review task through RepositoryTransaction.edit, covering title, priority, type, tags, acceptance or simple, context, related, and blockers; a successful save redirects to the board and the card reflects the new values; completed and cancelled tasks stay read-only; tests cover the in-modal edit form, a successful edit POST, and rejection of edits on closed tasks.
+  - Context: T010 excluded task editing. T015 moves the read-only detail view into a Tabler modal. After that lands, the modal is the only detail surface, so edits belong there rather than on a restored standalone page. Use the existing core edit contract; do not add a second mutation path.
+  - Related: T015
+  - Blocked by: T015
 
 ## Done (recent)
+
+- [x] **T010** Add a Kanban web frontend #feature
+  - Acceptance: Done when a Kanban board can browse and mutate tasks in a Task Repository through bot-todo's existing core rather than by hand-editing TODO.md, covering at least list, show, add, and complete, with responsive Tabler-styled columns that reflect task state, an accessible modal creation flow, and pinned CDN assets protected by integrity metadata and a restrictive CSP.
+  - Context: The CLI remains the programmatic interface. The Kanban Board is a local human-facing frontend over the same Task Repository model. Spec: .scratch/kanban-web-frontend/spec.md Plan: .scratch/kanban-web-frontend/plan.md Design: .scratch/kanban-web-frontend/design-option-1.png ADRs: docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md and docs/adr/0008-use-pinned-tabler-assets-for-the-kanban-presentation.md QA: design-qa.md Glossary: CONTEXT.md
+  - Outcome: completed
+  - Closed: 2026-08-19
 
 - [x] **T013** Prepare bot-todo for public deployment and deploy it #ops
   - Acceptance: Done when the package has the public-release metadata, license, and install docs required to ship, the distribution is published to PyPI, and a stranger can install and run bot-todo with uv tool install bot-todo (or the documented equivalent) without a checkout.

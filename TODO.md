@@ -1,9 +1,15 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 17 -->
+<!-- todo-format: 2; next-id: 18 -->
 
 ## P0 — Critical / Blocking
 
 ## P1 — High Priority
+
+- [ ] **T017** Fail more gracefully when the web command's port is in use #bug #web
+  - Acceptance: Done when bot-todo web on an occupied loopback port exits without a traceback or raw OSError, names the port that is already in use, explains that the Kanban Board could not bind that address, and tells the user how to retry with --port (including --port 0 to let the OS choose a free port). Tests cover the occupied-port path.
+  - Context: create_server binds ThreadingHTTPServer to 127.0.0.1; default --port is 8765. An occupied port currently surfaces as a generic OSError ('Address already in use') wrapped as io_error by the CLI, with no mention of the requested port or --port. Related: T010. ADR: docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md Plan: .scratch/kanban-web-frontend/t017-port-in-use-plan.md
+  - Related: T010
+  - Claimed: cursor | 2026-08-20 | master
 
 ## P2 — Backlog
 

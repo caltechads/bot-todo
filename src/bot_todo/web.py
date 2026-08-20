@@ -27,7 +27,10 @@ SECURITY_HEADERS = (
     ("Cache-Control", "no-store"),
     ("X-Content-Type-Options", "nosniff"),
     ("X-Frame-Options", "DENY"),
-    ("Referrer-Policy", "no-referrer"),
+    # "no-referrer" would make browsers send "Origin: null" on the board's form
+    # posts, which the origin check in do_POST rejects; keep a policy that
+    # preserves the same-origin Origin header.
+    ("Referrer-Policy", "same-origin"),
     (
         "Content-Security-Policy",
         (
@@ -139,10 +142,7 @@ class KanbanWebApp:
                 'aria-hidden="true"></i> This repository is read-only. '
                 "Run <code>bot-todo migrate</code> to enable board mutations.</p>"
             )
-        content = (
-            f"{mutation_area}"
-            f'<div class="board-columns">{columns_html}</div>'
-        )
+        content = f'{mutation_area}<div class="board-columns">{columns_html}</div>'
         return self._page("Kanban Board", content, header_action=header_action)
 
     def render_not_found(self) -> str:
@@ -259,9 +259,7 @@ class KanbanWebApp:
         if acceptance and simple:
             raise TodoError("choose acceptance or simple, not both", "usage")
         tags = [value.strip() for value in fields.get("tags", "").split(",")]
-        blockers = [
-            value.strip() for value in fields.get("blocked_by", "").split(",")
-        ]
+        blockers = [value.strip() for value in fields.get("blocked_by", "").split(",")]
         with self.store.transaction() as transaction:
             return transaction.add(
                 title=fields.get("title", ""),
@@ -322,14 +320,12 @@ class KanbanWebApp:
             '<article class="card card-sm mb-2"><div class="card-body">'
             f'<a class="task-title" href="/tasks/{task_id}"><strong>{task_id}</strong> {title}</a>'
             '<div class="mt-2"><span class="badge bg-blue-lt">'
-            f'{html.escape(task.priority or task.state)}</span> '
+            f"{html.escape(task.priority or task.state)}</span> "
             f'<span class="badge bg-secondary-lt">{html.escape(task.task_type or "untyped")}'
             f"</span></div>{actions}</div></article>"
         )
 
-    def _render_column(
-        self, heading: str, tasks: list[Task], *, writable: bool
-    ) -> str:
+    def _render_column(self, heading: str, tasks: list[Task], *, writable: bool) -> str:
         """Render one responsive board column with bounded terminal cards.
 
         Args:
@@ -345,13 +341,21 @@ class KanbanWebApp:
         state = heading.lower()
         icon, message, color = {
             "open": ("ti-circle", "Open tasks will appear here.", "text-blue"),
-            "review": ("ti-clock", "Tasks awaiting review will appear here.", "text-blue"),
+            "review": (
+                "ti-clock",
+                "Tasks awaiting review will appear here.",
+                "text-blue",
+            ),
             "completed": (
                 "ti-circle-check",
                 "Completed tasks will appear here.",
                 "text-green",
             ),
-            "cancelled": ("ti-ban", "Cancelled tasks will appear here.", "text-secondary"),
+            "cancelled": (
+                "ti-ban",
+                "Cancelled tasks will appear here.",
+                "text-secondary",
+            ),
         }[state]
         visible = tasks if state not in {"completed", "cancelled"} else tasks[:6]
         cards = "".join(self._render_card(task, writable=writable) for task in visible)
@@ -385,7 +389,7 @@ class KanbanWebApp:
         """
         priorities = "".join(
             f'<option value="{html.escape(priority)}"'
-            f'{" selected" if priority == "P2" else ""}>'
+            f"{' selected' if priority == 'P2' else ''}>"
             f"{html.escape(priority)}</option>"
             for priority in PRIORITY_HEADINGS
         )
@@ -400,7 +404,7 @@ class KanbanWebApp:
             '<div class="modal-header"><h2 class="modal-title" id="add-task-modal-title">New task</h2>'
             '<button type="button" class="btn-close" data-bs-dismiss="modal" '
             'aria-label="Close"></button></div><form method="post" action="/tasks">'
-            f'{self._csrf_field()}'
+            f"{self._csrf_field()}"
             '<div class="modal-body"><div class="mb-3"><label class="form-label">Title '
             '<input class="form-control" name="title" required></label></div>'
             '<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Priority '
@@ -470,8 +474,7 @@ class KanbanWebApp:
             Escaped hidden input markup.
         """
         return (
-            '<input type="hidden" name="_csrf" '
-            f'value="{html.escape(self.csrf_token)}">'
+            f'<input type="hidden" name="_csrf" value="{html.escape(self.csrf_token)}">'
         )
 
     def _page(self, title: str, content: str, *, header_action: str = "") -> str:
@@ -488,7 +491,7 @@ class KanbanWebApp:
             Complete HTML document.
         """
         return (
-            "<!doctype html><html lang=\"en\"><head>"
+            '<!doctype html><html lang="en"><head>'
             '<meta charset="utf-8"><meta name="viewport" '
             'content="width=device-width, initial-scale=1">'
             f"<title>{html.escape(title)}</title>"
@@ -503,7 +506,7 @@ class KanbanWebApp:
             ".task-title{color:var(--tblr-primary);font-weight:600}.actions{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.75rem}.terminal-overflow summary{color:var(--tblr-secondary);cursor:pointer;text-align:center}"
             "@media(max-width:1199px){.board-columns{grid-template-columns:repeat(2,minmax(14rem,1fr))}}"
             "@media(max-width:767px){.board-columns{grid-template-columns:1fr}.board-column{min-height:0}}"
-            "</style></head><body><div class=\"page\"><header class=\"navbar navbar-expand-md navbar-light py-3\"><div class=\"container-xl\"><a class=\"navbar-brand fs-2\" href=\"/\"><i class=\"ti ti-robot text-primary fs-2\" aria-hidden=\"true\"></i> bot-todo</a><span class=\"navbar-text border-start ps-3 ms-3 fs-3 d-none d-sm-inline\">Kanban Board</span>"
+            '</style></head><body><div class="page"><header class="navbar navbar-expand-md navbar-light py-3"><div class="container-xl"><a class="navbar-brand fs-2" href="/"><i class="ti ti-robot text-primary fs-2" aria-hidden="true"></i> bot-todo</a><span class="navbar-text border-start ps-3 ms-3 fs-3 d-none d-sm-inline">Kanban Board</span>'
             f'<div class="ms-auto">{header_action}</div></div></header><div class="page-wrapper">'
             '<main class="page-body"><div class="container-xl">'
             f"{content}</div></main></div></div>"
@@ -523,9 +526,7 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
         **kwargs: Arguments supplied by ``ThreadingHTTPServer``.
     """
 
-    def __init__(
-        self, *args: Any, app: KanbanWebApp, **kwargs: Any
-    ) -> None:
+    def __init__(self, *args: Any, app: KanbanWebApp, **kwargs: Any) -> None:
         """Initialize one request handler.
 
         Args:
@@ -639,11 +640,7 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
                 self.app.add_task(fields)
             else:
                 parts = path.split("/")
-                if (
-                    len(parts) != 4
-                    or parts[1] != "tasks"
-                    or parts[3] != "transition"
-                ):
+                if len(parts) != 4 or parts[1] != "tasks" or parts[3] != "transition":
                     self._send_html(404, self.app.render_not_found())
                     return
                 self.app.transition_task(unquote(parts[2]), fields)

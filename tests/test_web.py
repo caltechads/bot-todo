@@ -240,7 +240,9 @@ class KanbanWebTests(TodoCliTestCase):
                 self.assertEqual(status, 303)
                 self.assertEqual(headers["Location"], "/")
                 self.assertEqual(task.state, expected_state)
-        self.assertEqual(self.store.snapshot().find(cancel_task.task_id).reason, "Superseded")
+        self.assertEqual(
+            self.store.snapshot().find(cancel_task.task_id).reason, "Superseded"
+        )
 
     def test_board_exposes_add_fields_and_accessible_transition_forms(self) -> None:
         """Catch a board that renders state but offers no human controls."""
@@ -279,7 +281,9 @@ class KanbanWebTests(TodoCliTestCase):
         """Catch accidental web mutation of a legacy Task Data Format."""
         self.add_simple("Legacy task")
         todo_path = self.root / "TODO.md"
-        todo_path.write_text(todo_path.read_text().replace("todo-format: 2", "todo-format: 1"))
+        todo_path.write_text(
+            todo_path.read_text().replace("todo-format: 2", "todo-format: 1")
+        )
 
         status, _, body = self.get("/")
 
@@ -341,6 +345,32 @@ class KanbanWebTests(TodoCliTestCase):
             {
                 "Content-Type": "application/x-www-form-urlencoded",
                 "Origin": "https://evil.example",
+            },
+        )
+
+        self.assertEqual(status, 403)
+        self.assertIn("Forbidden", response_body)
+        self.assertEqual(self.store.snapshot().document.tasks, [])
+
+    def test_post_rejects_an_opaque_browser_origin(self) -> None:
+        """Catch the null origin browsers send under a no-referrer policy."""
+        body = urlencode(
+            {
+                "_csrf": "test-token",
+                "title": "Opaque origin",
+                "priority": "P2",
+                "task_type": "chore",
+                "simple": "on",
+            }
+        )
+
+        status, _, response_body = self.request(
+            "POST",
+            "/tasks",
+            body,
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": "null",
             },
         )
 
@@ -457,9 +487,7 @@ class KanbanWebTests(TodoCliTestCase):
         )
         for task_id, fields in cases:
             with self.subTest(task_id=task_id):
-                status, _, body = self.post(
-                    f"/tasks/{task_id}/transition", fields
-                )
+                status, _, body = self.post(f"/tasks/{task_id}/transition", fields)
                 self.assertEqual(status, 409)
                 self.assertIn("Conflict", body)
                 self.assertNotIn("Traceback", body)
@@ -533,7 +561,7 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(headers["Cache-Control"], "no-store")
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         self.assertEqual(headers["X-Frame-Options"], "DENY")
-        self.assertEqual(headers["Referrer-Policy"], "no-referrer")
+        self.assertEqual(headers["Referrer-Policy"], "same-origin")
         policy = headers["Content-Security-Policy"]
         for directive in (
             "default-src 'none'",
@@ -552,7 +580,7 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(headers["Cache-Control"], "no-store")
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         self.assertEqual(headers["X-Frame-Options"], "DENY")
-        self.assertEqual(headers["Referrer-Policy"], "no-referrer")
+        self.assertEqual(headers["Referrer-Policy"], "same-origin")
         self.assertIn("default-src 'none'", headers["Content-Security-Policy"])
 
     def test_board_uses_the_tabler_shell_and_restrictive_cdn_policy(self) -> None:
@@ -582,7 +610,9 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertIn('class="page-wrapper"', body)
         header = body.split("<header", 1)[1].split("</header>", 1)[0]
         self.assertIn('class="navbar-brand fs-2"', header)
-        self.assertIn('class="navbar-text border-start ps-3 ms-3 fs-3 d-none d-sm-inline"', header)
+        self.assertIn(
+            'class="navbar-text border-start ps-3 ms-3 fs-3 d-none d-sm-inline"', header
+        )
         self.assertIn("bot-todo", header)
         self.assertIn("Kanban Board", header)
         self.assertIn('data-bs-target="#add-task-modal"', header)
@@ -648,7 +678,12 @@ class KanbanWebTests(TodoCliTestCase):
 
         _, _, body = self.get("/")
 
-        for state, count in (("open", 0), ("review", 0), ("completed", 7), ("cancelled", 7)):
+        for state, count in (
+            ("open", 0),
+            ("review", 0),
+            ("completed", 7),
+            ("cancelled", 7),
+        ):
             self.assertIn(f'data-state="{state}"', body)
             self.assertIn(f'aria-label="{count} {state} tasks"', body)
         self.assertIn('class="board-columns"', body)
@@ -664,13 +699,19 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(body.count('<details class="terminal-overflow">'), 2)
         self.assertIn("+ 1 more completed task", body)
         self.assertIn("+ 1 more cancelled task", body)
-        self.assertLess(body.index("Completed boundary 6"), body.index("Completed boundary 0"))
-        self.assertLess(body.index("Cancelled boundary 6"), body.index("Cancelled boundary 0"))
+        self.assertLess(
+            body.index("Completed boundary 6"), body.index("Completed boundary 0")
+        )
+        self.assertLess(
+            body.index("Cancelled boundary 6"), body.index("Cancelled boundary 0")
+        )
 
     def test_populated_state_column_headers_include_their_tabler_icons(self) -> None:
         """Catch state icons that disappear once a column has cards."""
         with self.store.transaction() as transaction:
-            transaction.add(title="Open header", priority="P1", task_type="feature", simple=True)
+            transaction.add(
+                title="Open header", priority="P1", task_type="feature", simple=True
+            )
             reviewing = transaction.add(
                 title="Review header", priority="P1", task_type="feature", simple=True
             )

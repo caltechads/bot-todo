@@ -22,6 +22,10 @@ port 0 requests an ephemeral port. `web` rejects `--all` and `--json`.
 - `POST /tasks` maps the full add form to `RepositoryTransaction.add()`.
 - `POST /tasks/{task_id}/transition` maps `review`, `reopen`, `complete`, and
   `cancel` to the existing transaction methods. Cancel requires a reason.
+- `POST /tasks/{task_id}/edit` maps the detail-modal form onto
+  `RepositoryTransaction.edit()` for open and Review tasks. Empty Context,
+  Related, Tags, and Blockers clear those fields. Completed and cancelled
+  tasks have no edit form.
 
 Successful POSTs redirect to `/`. The board displays active tasks in canonical
 priority and file order, partitions the active file's recent Done entries by
@@ -47,9 +51,11 @@ medium widths, and one column on narrow screens. Every state column has an
 icon, text heading, count, and an icon-plus-text empty-state message. Completed
 and Cancelled columns show at most six cards initially, with the remainder in
 a native disclosure. The complete add form opens in a centered `modal-lg`.
-Each board-visible card title opens a matching read-only detail modal with
-the Task's canonical fields. Task values are escaped, and state is conveyed
-with text as well as color.
+Each board-visible card title opens a matching Tabler detail modal. On a
+writable board, open and Review modals are a pre-filled edit form with
+read-only ID, State, Claim, and Reviewed above the fields; completed and
+cancelled tasks stay a read-only definition list of canonical fields. Task
+values are escaped, and state is conveyed with text as well as color.
 
 Each POST requires a process-local CSRF token, an exact loopback Host and
 Origin, URL-encoded input, at most 32 fields, and at most 64 KiB. Responses
@@ -61,11 +67,12 @@ restricted.
 Unknown paths, including former `GET /tasks/{task_id}` URLs, return 404;
 malformed forms return 400; request trust failures
 return 403; oversized bodies return 413; unsupported form media types return
-415. Repository and transition failures render concise human error pages
-without tracebacks.
+415. Repository, transition, and edit failures render concise human error
+pages without tracebacks.
 
 ## Exclusions
 
 Authentication, non-loopback binding, multi-repository boards, drag-and-drop,
-task editing, claims, full archive listing, polling, WebSockets, and a JSON API
-remain outside T010.
+claims, full archive listing, polling, WebSockets, and a JSON API remain
+outside this board. Task editing of open and Review work is in the detail
+modal (T016); it is no longer a T010 exclusion.

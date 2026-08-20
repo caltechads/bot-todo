@@ -160,6 +160,7 @@ class KanbanWebTests(TodoCliTestCase):
                 context="Local operator",
                 related="T009",
             )
+            transaction.claim(task.task_id, "tester", "test-branch")
 
         status, _, body = self.get("/")
 
@@ -177,27 +178,23 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertIn(f'aria-labelledby="{title_id}"', modal)
         self.assertIn(f'id="{title_id}"', modal)
         self.assertIn(f"{task.task_id} — Inspect details", modal)
-        self.assertIn(
-            '<button type="button" class="btn-close" data-bs-dismiss="modal" '
-            'aria-label="Close">',
-            modal,
-        )
+        self.assertIn(f'action="/tasks/{task.task_id}/edit"', modal)
+        self.assertIn('name="title" value="Inspect details"', modal)
+        self.assertIn('<option value="P1" selected>', modal)
+        self.assertIn('<option value="feature" selected>', modal)
+        self.assertIn("Every field is visible", modal)
+        self.assertIn('name="tags" value="browser"', modal)
+        self.assertIn("Local operator", modal)
+        self.assertIn('name="related" value="T009"', modal)
+        self.assertIn('<details class="mt-3" open>', modal)
+        self.assertIn("tester | ", modal)
         self.assertIn(
             '<button type="button" class="btn btn-link" data-bs-dismiss="modal">'
-            "Close</button>",
+            "Cancel</button>",
             modal,
         )
-        for value in (
-            task.task_id,
-            "Inspect details",
-            "P1",
-            "feature",
-            "browser",
-            "Every field is visible",
-            "Local operator",
-            "T009",
-        ):
-            self.assertIn(value, modal)
+        self.assertIn('type="submit">Save</button>', modal)
+        self.assertNotIn(">Close</button>", modal)
         self.assertNotIn(f'action="/tasks/{task.task_id}/transition"', modal)
         self.assertIn(f'action="/tasks/{task.task_id}/transition"', body)
 
@@ -898,3 +895,264 @@ class KanbanWebTests(TodoCliTestCase):
         url = output.getvalue().strip()
         self.assertRegex(url, r"^Kanban Board: http://127\.0\.0\.1:\d+$")
         open_browser.assert_called_once_with(url.removeprefix("Kanban Board: "))
+
+    def test_closed_task_detail_modal_stays_read_only(self) -> None:
+        """Catch an edit form appearing on a completed or cancelled task."""
+        with self.store.transaction() as transaction:
+            completed = transaction.add(
+                title="Finished work",
+                priority="P2",
+                task_type="chore",
+                simple=True,
+            )
+            cancelled = transaction.add(
+                title="Stopped work",
+                priority="P2",
+                task_type="docs",
+                simple=True,
+            )
+            transaction.close(completed.task_id, "completed")
+            transaction.close(cancelled.task_id, "cancelled", "No longer needed")
+
+        _, _, body = self.get("/")
+
+        for task_id, title in (
+            (completed.task_id, "Finished work"),
+            (cancelled.task_id, "Stopped work"),
+        ):
+            modal = self._task_modal(body, task_id)
+            self.assertNotIn(f'action="/tasks/{task_id}/edit"', modal)
+            self.assertIn(
+                '<button type="button" class="btn btn-link" data-bs-dismiss="modal">'
+                "Close</button>",
+                modal,
+            )
+            self.assertIn(title, modal)
+
+    def test_review_task_detail_modal_is_editable(self) -> None:
+        """Catch Review tasks left on the read-only definition list."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Needs review",
+                priority="P1",
+                task_type="feature",
+                simple=True,
+            )
+            transaction.review(task.task_id)
+
+        _, _, body = self.get("/")
+        modal = self._task_modal(body, task.task_id)
+        self.assertIn(f'action="/tasks/{task.task_id}/edit"', modal)
+        self.assertIn('name="simple" checked', modal)
+        self.assertIn('<details class="mt-3">', modal)
+        self.assertNotIn('<details class="mt-3" open>', modal)
+
+    def test_edit_form_persists_required_and_advanced_fields(self) -> None:
+        """Catch an edit POST that drops fields or skips RepositoryTransaction.edit."""
+        with self.store.transaction() as transaction:
+            blocker = transaction.add(
+                title="Blocker",
+                priority="P2",
+                task_type="chore",
+                simple=True,
+            )
+            task = transaction.add(
+                title="Original title",
+                priority="P2",
+                task_type="chore",
+                tags=["old"],
+                acceptance="Old acceptance",
+                context="Old context",
+                related="old-related",
+                blocked_by=[blocker.task_id],
+            )
+
+        status, headers, _ = self.post(
+            f"/tasks/{task.task_id}/edit",
+            {
+                "title": "Edited in browser",
+                "priority": "P1",
+                "task_type": "feature",
+                "acceptance": "New acceptance",
+                "tags": "browser, local",
+                "context": "New context",
+                "related": "T015",
+                "blocked_by": "",
+            },
+        )
+
+        edited = self.store.snapshot().find(task.task_id)
+        self.assertEqual(status, 303)
+        self.assertEqual(headers["Location"], "/")
+        self.assertEqual(edited.title, "Edited in browser")
+        self.assertEqual(edited.priority, "P1")
+        self.assertEqual(edited.task_type, "feature")
+        self.assertEqual(edited.user_tags, ["browser", "local"])
+        self.assertEqual(edited.acceptance, "New acceptance")
+        self.assertFalse(edited.simple)
+        self.assertEqual(edited.context, "New context")
+        self.assertEqual(edited.related, "T015")
+        self.assertEqual(edited.blocked_by, [])
+        _, _, body = self.get("/")
+        self.assertIn("Edited in browser", body)
+
+    def test_edit_form_noop_save_redirects_to_the_board(self) -> None:
+        """Catch a no-change Save treated as a CLI-style usage error."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Unchanged",
+                priority="P2",
+                task_type="chore",
+                simple=True,
+            )
+
+        status, headers, _ = self.post(
+            f"/tasks/{task.task_id}/edit",
+            {
+                "title": "Unchanged",
+                "priority": "P2",
+                "task_type": "chore",
+                "simple": "on",
+                "tags": "",
+                "context": "",
+                "related": "",
+                "blocked_by": "",
+            },
+        )
+
+        self.assertEqual(status, 303)
+        self.assertEqual(headers["Location"], "/")
+        self.assertEqual(self.store.snapshot().find(task.task_id).title, "Unchanged")
+
+    def test_edit_rejects_closed_tasks(self) -> None:
+        """Catch an edit POST that mutates a completed or cancelled task."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Done already",
+                priority="P2",
+                task_type="chore",
+                simple=True,
+            )
+            transaction.close(task.task_id, "completed")
+
+        status, _, body = self.post(
+            f"/tasks/{task.task_id}/edit",
+            {
+                "title": "Should not stick",
+                "priority": "P2",
+                "task_type": "chore",
+                "simple": "on",
+            },
+        )
+
+        self.assertEqual(status, 409)
+        self.assertIn("closed tasks cannot be edited", body)
+        self.assertEqual(self.store.snapshot().find(task.task_id).title, "Done already")
+
+    def test_edit_rejects_acceptance_together_with_simple(self) -> None:
+        """Catch both Acceptance and Simple submitted on an edit."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Exclusive fields",
+                priority="P2",
+                task_type="chore",
+                simple=True,
+            )
+
+        status, _, _ = self.post(
+            f"/tasks/{task.task_id}/edit",
+            {
+                "title": "Exclusive fields",
+                "priority": "P2",
+                "task_type": "chore",
+                "acceptance": "Done when complete",
+                "simple": "on",
+            },
+        )
+
+        self.assertEqual(status, 400)
+        self.assertTrue(self.store.snapshot().find(task.task_id).simple)
+
+    def test_edit_rejects_neither_acceptance_nor_simple(self) -> None:
+        """Catch an edit that would drop both Acceptance and #simple."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Needs one",
+                priority="P2",
+                task_type="chore",
+                acceptance="Keep me or mark simple",
+            )
+
+        status, _, _ = self.post(
+            f"/tasks/{task.task_id}/edit",
+            {
+                "title": "Needs one",
+                "priority": "P2",
+                "task_type": "chore",
+                "acceptance": "",
+            },
+        )
+
+        self.assertEqual(status, 400)
+        self.assertEqual(
+            self.store.snapshot().find(task.task_id).acceptance,
+            "Keep me or mark simple",
+        )
+
+    def test_edit_rejects_reserved_words_in_tags(self) -> None:
+        """Catch type or simple leaking into the Tags field."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Reserved tags",
+                priority="P2",
+                task_type="chore",
+                tags=["browser"],
+                simple=True,
+            )
+
+        for tags in ("browser, feature", "browser, simple", "browser, #bug"):
+            with self.subTest(tags=tags):
+                status, _, _ = self.post(
+                    f"/tasks/{task.task_id}/edit",
+                    {
+                        "title": "Reserved tags",
+                        "priority": "P2",
+                        "task_type": "chore",
+                        "simple": "on",
+                        "tags": tags,
+                    },
+                )
+                self.assertEqual(status, 400)
+        self.assertEqual(
+            self.store.snapshot().find(task.task_id).user_tags, ["browser"]
+        )
+
+    def test_edit_unknown_task_returns_not_found(self) -> None:
+        """Catch POST /tasks/<id>/edit treating a missing id as a generic 404."""
+        status, _, body = self.post(
+            "/tasks/T999/edit",
+            {
+                "title": "Missing",
+                "priority": "P2",
+                "task_type": "chore",
+                "simple": "on",
+            },
+        )
+
+        self.assertEqual(status, 404)
+        self.assertIn("The requested page does not exist", body)
+
+    def test_get_edit_path_returns_generic_not_found(self) -> None:
+        """Catch a standalone GET edit page."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="No get edit",
+                priority="P2",
+                task_type="chore",
+                simple=True,
+            )
+
+        status, _, body = self.get(f"/tasks/{task.task_id}/edit")
+
+        self.assertEqual(status, 404)
+        self.assertIn("The requested page does not exist", body)

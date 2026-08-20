@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from bot_todo.repository import (
     PRIORITY_HEADINGS,
+    SIMPLE_TAG,
     TYPE_TAGS,
     WRITE_FORMAT_VERSION,
     Task,
@@ -129,7 +130,7 @@ class KanbanWebApp:
             for heading, tasks in columns
         )
         detail_modals = "".join(
-            self._render_task_detail_modal(task)
+            self._render_task_detail_modal(task, writable=writable)
             for _, tasks in columns
             for task in tasks
         )
@@ -225,6 +226,68 @@ class KanbanWebApp:
                 context=fields.get("context") or None,
                 related=fields.get("related") or None,
                 blocked_by=[value for value in blockers if value],
+            )
+
+    def edit_task(self, task_id: str, fields: dict[str, str]) -> Task:
+        """Replace editable fields on one open or review task.
+
+        Side Effects:
+            Mutates the selected Task Repository.
+
+        Args:
+            task_id: Task receiving the edit.
+            fields: Parsed URL-encoded form fields.
+
+        Returns:
+            Updated task.
+
+        Raises:
+            TodoError: If form values violate the edit contract or the task
+                is closed.
+        """
+        priority = fields.get("priority", "")
+        task_type = fields.get("task_type", "")
+        if priority not in PRIORITY_HEADINGS:
+            raise TodoError("unknown priority", "usage")
+        if task_type not in TYPE_TAGS:
+            raise TodoError("unknown task type", "usage")
+        acceptance = fields.get("acceptance") or None
+        simple = fields.get("simple") == "on"
+        if acceptance and simple:
+            raise TodoError("choose acceptance or simple, not both", "usage")
+        if not acceptance and not simple:
+            raise TodoError("choose acceptance or simple", "usage")
+        tags = [value.strip() for value in fields.get("tags", "").split(",")]
+        submitted = [value for value in tags if value]
+        reserved = TYPE_TAGS | {SIMPLE_TAG}
+        if any(value.removeprefix("#") in reserved for value in submitted):
+            raise TodoError("use type and simple controls, not tags", "usage")
+        blockers = [
+            value.strip()
+            for value in fields.get("blocked_by", "").split(",")
+            if value.strip()
+        ]
+        current = self.store.snapshot().find(task_id)
+        current_tags = list(current.user_tags) if current is not None else []
+        add_tags = [tag for tag in submitted if tag not in current_tags]
+        remove_tags = [tag for tag in current_tags if tag not in submitted]
+        context = fields.get("context") or None
+        related = fields.get("related") or None
+        with self.store.transaction() as transaction:
+            return transaction.edit(
+                task_id,
+                title=fields.get("title", ""),
+                priority=priority,
+                task_type=task_type,
+                add_tags=add_tags,
+                remove_tags=remove_tags,
+                acceptance=None if simple else acceptance,
+                context=context,
+                related=related,
+                blocked_by=blockers,
+                clear_acceptance=simple,
+                clear_context=not context,
+                clear_related=not related,
             )
 
     def transition_task(self, task_id: str, fields: dict[str, str]) -> Task:
@@ -337,20 +400,35 @@ class KanbanWebApp:
             f"{len(tasks)}</span></div>{cards}</section>"
         )
 
-    def _render_task_detail_modal(self, task: Task) -> str:
-        """Render one read-only Tabler modal for a board-visible task.
+    def _render_task_detail_modal(self, task: Task, *, writable: bool) -> str:
+        """Render one Tabler modal for a board-visible task.
+
+        Args:
+            task: Task whose canonical fields are displayed or edited.
+
+        Keyword Args:
+            writable: Whether open and review tasks may include an edit form.
+
+        Returns:
+            Escaped modal markup matching the New task dismiss contract.
+        """
+        if writable and task.state in {"open", "review"}:
+            return self._render_task_edit_modal(task)
+        return self._render_task_readonly_modal(task)
+
+    def _render_task_readonly_modal(self, task: Task) -> str:
+        """Render a read-only detail modal.
 
         Args:
             task: Task whose canonical fields are displayed.
 
         Returns:
-            Escaped modal markup matching the New task dismiss contract.
+            Escaped modal markup with a definition list and Close control.
         """
         task_id = html.escape(task.task_id)
         title = html.escape(task.title)
         modal_id = f"task-{task_id}-modal"
         title_id = f"{modal_id}-title"
-        claim = task.claim
         values = (
             ("ID", task.task_id),
             ("Title", task.title),
@@ -363,20 +441,10 @@ class KanbanWebApp:
             ("Context", task.context),
             ("Related", task.related),
             ("Blocked by", ", ".join(task.blocked_by)),
-            (
-                "Claim",
-                None
-                if claim is None
-                else f"{claim.actor} | {claim.claimed_on} | {claim.branch}",
-            ),
+            ("Claim", self._claim_text(task)),
             ("Reviewed", task.reviewed_on),
             ("Closed", task.closed_on),
             ("Reason", task.reason),
-        )
-        details = "".join(
-            f'<dt class="col-sm-3 text-secondary">{html.escape(label)}</dt>'
-            f'<dd class="col-sm-9">{html.escape(value or "—")}</dd>'
-            for label, value in values
         )
         heading = f"{task_id} — {title}"
         return (
@@ -387,9 +455,145 @@ class KanbanWebApp:
             f'<h2 class="modal-title" id="{title_id}">{heading}</h2>'
             '<button type="button" class="btn-close" data-bs-dismiss="modal" '
             'aria-label="Close"></button></div>'
-            f'<div class="modal-body"><dl class="row mb-0">{details}</dl></div>'
+            f'<div class="modal-body"><dl class="row mb-0">'
+            f"{self._definition_rows(values)}</dl></div>"
             '<div class="modal-footer"><button type="button" class="btn btn-link" '
             'data-bs-dismiss="modal">Close</button></div></div></div></div>'
+        )
+
+    def _render_task_edit_modal(self, task: Task) -> str:
+        """Render a pre-filled edit form in the detail modal.
+
+        Args:
+            task: Open or review task to edit.
+
+        Returns:
+            Escaped modal markup posting to ``/tasks/{id}/edit``.
+        """
+        task_id = html.escape(task.task_id)
+        title = html.escape(task.title)
+        modal_id = f"task-{task_id}-modal"
+        title_id = f"{modal_id}-title"
+        metadata = (
+            ("ID", task.task_id),
+            ("State", task.state),
+            ("Claim", self._claim_text(task)),
+            ("Reviewed", task.reviewed_on),
+        )
+        open_attr = (
+            " open"
+            if task.user_tags or task.context or task.related or task.blocked_by
+            else ""
+        )
+        checked = " checked" if task.simple else ""
+        heading = f"{task_id} — {title}"
+        return (
+            f'<div class="modal modal-blur fade" id="{modal_id}" tabindex="-1" '
+            f'aria-labelledby="{title_id}" aria-hidden="true">'
+            '<div class="modal-dialog modal-lg modal-dialog-centered">'
+            '<div class="modal-content"><div class="modal-header">'
+            f'<h2 class="modal-title" id="{title_id}">{heading}</h2>'
+            '<button type="button" class="btn-close" data-bs-dismiss="modal" '
+            'aria-label="Close"></button></div>'
+            f'<form method="post" action="/tasks/{task_id}/edit">'
+            f"{self._csrf_field()}"
+            '<div class="modal-body">'
+            f'<dl class="row">{self._definition_rows(metadata)}</dl>'
+            '<div class="mb-3"><label class="form-label">Title '
+            f'<input class="form-control" name="title" value="{title}" required>'
+            "</label></div>"
+            '<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Priority '
+            f'<select class="form-select" name="priority">'
+            f"{self._priority_options(task.priority or 'P2')}</select></label></div>"
+            '<div class="col-md-6 mb-3"><label class="form-label">Type '
+            f'<select class="form-select" name="task_type">'
+            f"{self._type_options(task.task_type)}</select></label></div></div>"
+            '<div class="mb-3"><label class="form-label">Acceptance '
+            f'<textarea class="form-control" name="acceptance">'
+            f"{html.escape(task.acceptance or '')}</textarea></label></div>"
+            '<label class="form-check"><input class="form-check-input" type="checkbox" '
+            f'name="simple"{checked}><span class="form-check-label">Simple task'
+            "</span></label>"
+            f'<details class="mt-3"{open_attr}><summary>Advanced fields</summary>'
+            '<div class="mt-3"><label class="form-label">Tags '
+            f'<input class="form-control" name="tags" value="'
+            f'{html.escape(", ".join(task.user_tags))}" '
+            'placeholder="browser, local"></label>'
+            '<label class="form-label">Context '
+            f'<textarea class="form-control" name="context">'
+            f"{html.escape(task.context or '')}</textarea></label>"
+            '<label class="form-label">Related '
+            f'<input class="form-control" name="related" value="'
+            f'{html.escape(task.related or "")}"></label>'
+            '<label class="form-label">Blocked by '
+            f'<input class="form-control" name="blocked_by" value="'
+            f'{html.escape(", ".join(task.blocked_by))}" '
+            'placeholder="T001, T002"></label></div></details></div>'
+            '<div class="modal-footer"><button type="button" class="btn btn-link" '
+            'data-bs-dismiss="modal">Cancel</button>'
+            '<button class="btn btn-primary" type="submit">Save</button>'
+            "</div></form></div></div></div>"
+        )
+
+    def _definition_rows(self, values: tuple[tuple[str, str | None], ...]) -> str:
+        """Render definition-list rows.
+
+        Args:
+            values: Label and display value pairs.
+
+        Returns:
+            Escaped ``dt``/``dd`` markup.
+        """
+        return "".join(
+            f'<dt class="col-sm-3 text-secondary">{html.escape(label)}</dt>'
+            f'<dd class="col-sm-9">{html.escape(value or "—")}</dd>'
+            for label, value in values
+        )
+
+    def _claim_text(self, task: Task) -> str | None:
+        """Format a claim for display.
+
+        Args:
+            task: Task whose claim should be shown.
+
+        Returns:
+            ``actor | date | branch`` text, or ``None`` when unclaimed.
+        """
+        claim = task.claim
+        if claim is None:
+            return None
+        return f"{claim.actor} | {claim.claimed_on} | {claim.branch}"
+
+    def _priority_options(self, selected: str) -> str:
+        """Render priority ``<option>`` elements.
+
+        Args:
+            selected: Priority key marked ``selected``.
+
+        Returns:
+            Escaped option markup.
+        """
+        return "".join(
+            f'<option value="{html.escape(priority)}"'
+            f"{' selected' if priority == selected else ''}>"
+            f"{html.escape(priority)}</option>"
+            for priority in PRIORITY_HEADINGS
+        )
+
+    def _type_options(self, selected: str | None) -> str:
+        """Render type ``<option>`` elements.
+
+        Args:
+            selected: Type tag marked ``selected``, if any.
+
+        Returns:
+            Escaped option markup.
+        """
+        return "".join(
+            f'<option value="{html.escape(task_type)}"'
+            f"{' selected' if task_type == selected else ''}>"
+            f"{html.escape(task_type)}</option>"
+            for task_type in sorted(TYPE_TAGS)
         )
 
     def _render_add_form(self) -> str:
@@ -398,16 +602,6 @@ class KanbanWebApp:
         Returns:
             Accessible form covering the repository add contract.
         """
-        priorities = "".join(
-            f'<option value="{html.escape(priority)}"'
-            f"{' selected' if priority == 'P2' else ''}>"
-            f"{html.escape(priority)}</option>"
-            for priority in PRIORITY_HEADINGS
-        )
-        task_types = "".join(
-            f'<option value="{html.escape(task_type)}">{html.escape(task_type)}</option>'
-            for task_type in sorted(TYPE_TAGS)
-        )
         return (
             '<div class="modal modal-blur fade" id="add-task-modal" tabindex="-1" '
             'aria-labelledby="add-task-modal-title" aria-hidden="true">'
@@ -419,9 +613,11 @@ class KanbanWebApp:
             '<div class="modal-body"><div class="mb-3"><label class="form-label">Title '
             '<input class="form-control" name="title" required></label></div>'
             '<div class="row"><div class="col-md-6 mb-3"><label class="form-label">Priority '
-            f'<select class="form-select" name="priority">{priorities}</select></label></div>'
+            f'<select class="form-select" name="priority">'
+            f"{self._priority_options('P2')}</select></label></div>"
             '<div class="col-md-6 mb-3"><label class="form-label">Type '
-            f'<select class="form-select" name="task_type">{task_types}</select></label></div></div>'
+            f'<select class="form-select" name="task_type">'
+            f"{self._type_options(None)}</select></label></div></div>"
             '<div class="mb-3"><label class="form-label">Acceptance '
             '<textarea class="form-control" name="acceptance"></textarea></label></div>'
             '<label class="form-check"><input class="form-check-input" type="checkbox" '
@@ -648,13 +844,24 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
                 self.app.add_task(fields)
             else:
                 parts = path.split("/")
-                if len(parts) != 4 or parts[1] != "tasks" or parts[3] != "transition":
+                if (
+                    len(parts) != 4
+                    or parts[1] != "tasks"
+                    or parts[3] not in {"transition", "edit"}
+                ):
                     self._send_html(404, self.app.render_not_found())
                     return
-                self.app.transition_task(unquote(parts[2]), fields)
+                task_id = unquote(parts[2])
+                if parts[3] == "edit":
+                    self.app.edit_task(task_id, fields)
+                else:
+                    self.app.transition_task(task_id, fields)
         except TodoError as error:
             if error.code == "invalid_document":
                 self._send_html(400, self.app.render_error("Bad request", str(error)))
+                return
+            if error.code == "unknown_task" and path.endswith("/edit"):
+                self._send_html(404, self.app.render_not_found())
                 return
             self._send_todo_error(error)
             return

@@ -907,12 +907,14 @@ class KanbanWebTests(TodoCliTestCase):
 
     def test_create_server_does_not_rewrite_other_bind_errors(self) -> None:
         """Catch EADDRINUSE handling that swallows unrelated bind failures."""
-        with mock.patch(
-            "bot_todo.web.ThreadingHTTPServer",
-            side_effect=OSError(errno.EACCES, "Permission denied"),
+        with (
+            mock.patch(
+                "bot_todo.web.ThreadingHTTPServer",
+                side_effect=OSError(errno.EACCES, "Permission denied"),
+            ),
+            self.assertRaises(OSError) as raised,
         ):
-            with self.assertRaises(OSError) as raised:
-                self.app.create_server(80)
+            self.app.create_server(80)
 
         self.assertEqual(raised.exception.errno, errno.EACCES)
 

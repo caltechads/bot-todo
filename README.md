@@ -123,7 +123,9 @@ bot-todo --repo bot-todo web
 
 The server binds only to `127.0.0.1`, prints its URL, and opens the default
 browser unless `--no-open` is supplied. Port `8765` is the default; port `0`
-asks the operating system to choose an available port. `web` manages one Task
+asks the operating system to choose an available port. If that port is already
+in use, the command exits with an error naming 127.0.0.1 and the port and
+suggests retrying with --port PORT or --port 0. `web` manages one Task
 Repository and rejects `--all` and `--json`.
 
 The Kanban Board groups recent tasks into Open, Review, Completed, and

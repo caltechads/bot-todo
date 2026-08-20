@@ -10,7 +10,10 @@ creating a second task model or mutation path.
 `bot-todo [--root PATH | --repo NAME] web [--port PORT] [--no-open]` resolves
 one repository through the existing selector, binds `127.0.0.1`, prints the
 actual URL, and opens it unless `--no-open` is set. The default port is 8765;
-port 0 requests an ephemeral port. `web` rejects `--all` and `--json`.
+port 0 requests an ephemeral port. An occupied requested port is a coded CLI
+failure that names 127.0.0.1 and the port, explains that the Kanban Board could
+not bind, and tells the user to retry with --port (including --port 0). The
+server does not choose another port. `web` rejects `--all` and `--json`.
 
 ## HTTP interface
 

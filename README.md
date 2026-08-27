@@ -228,8 +228,7 @@ If any configured repository cannot be read, the command prints no task data
 and exits `3`.
 
 A missing default config is an empty collection. Local discovery and `--root`
-never load configuration except for `web`, which loads the collection for the
-repository menu.
+never load configuration.
 
 Manage the collection without editing the file by hand:
 

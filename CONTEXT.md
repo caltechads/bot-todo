@@ -23,7 +23,9 @@ separate Task Repositories. A configured Task Repository may also have a name.
 _Avoid_: Project, source repository
 
 **Kanban Board**:
-The local human-facing view of one Task Repository, grouped by Task State.
+The local human-facing view of either one selected Task Repository or the
+Repository Collection, grouped by Task State. A collection-wide view is
+read-only.
 _Avoid_: Web frontend, web UI, task dashboard
 
 **Repository Name**:

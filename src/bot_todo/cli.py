@@ -162,9 +162,10 @@ class RepositorySelector:
     """
     Resolve the settled selector options into one Task Repository.
 
-    Configuration is loaded only for ``--repo`` and ``--all``; an explicit
-    ``--root`` and local discovery never read it and report a ``None``
-    Repository Name.
+    ``web`` loads the Repository Collection for every launch form so the
+    Kanban Board can list configured entries. ``--root`` and local discovery
+    still report a ``None`` Repository Name of their own. Other commands load
+    configuration only for ``--repo`` and ``--all``.
 
     Args:
         root: Exact repository path from ``--root``.
@@ -222,9 +223,14 @@ class RepositorySelector:
             if self.root or self.repo or self.aggregate:
                 raise TodoError("repos accepts no repository selector", "usage")
             return
-        if self.config is not None and self.repo is None and not self.aggregate:
+        if (
+            self.config is not None
+            and self.repo is None
+            and not self.aggregate
+            and command != "web"
+        ):
             raise TodoError("--config requires --repo or --all", "usage")
-        if self.aggregate and command not in AGGREGATE_COMMANDS:
+        if self.aggregate and command != "web" and command not in AGGREGATE_COMMANDS:
             raise TodoError(f"--all does not support {command}", "usage")
 
     def collection(self) -> RepositoryCollection:
@@ -1636,10 +1642,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif arguments.command == "repos":
             outcome = CollectionRunner(selector.explicit_path()).run(arguments)
         elif arguments.command == "web":
-            selected = selector.select(arguments.command)
+            collection = selector.collection()
+            if arguments.all:
+                store = None
+            elif arguments.repo is not None:
+                store = TodoStore(collection.entry(arguments.repo).path)
+            else:
+                store = selector.select(arguments.command).store
             run_web(
-                selected.store,
-                name=selected.name,
+                store,
+                collection=collection,
                 port=arguments.port,
                 open_browser=not arguments.no_open,
             )

@@ -12,6 +12,7 @@ from http.server import ThreadingHTTPServer
 from unittest import mock
 from urllib.parse import urlencode
 
+from bot_todo.config import RepositoryCollection
 from bot_todo.repository import TodoError, TodoStore
 from bot_todo.web import KanbanWebApp, run_web
 from tests.support import TodoCliTestCase
@@ -24,7 +25,11 @@ class KanbanWebTests(TodoCliTestCase):
         """Create a repository and start an ephemeral Kanban server."""
         super().setUp()
         self.store = TodoStore(self.root)
-        self.app = KanbanWebApp(self.store, csrf_token="test-token")
+        self.app = KanbanWebApp(
+            self.store,
+            RepositoryCollection(()),
+            csrf_token="test-token",
+        )
         self.server = self.app.create_server(0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -930,7 +935,12 @@ class KanbanWebTests(TodoCliTestCase):
             ),
             mock.patch("webbrowser.open") as open_browser,
         ):
-            run_web(self.store, name=None, port=0, open_browser=True)
+            run_web(
+                self.store,
+                collection=RepositoryCollection(()),
+                port=0,
+                open_browser=True,
+            )
 
         url = output.getvalue().strip()
         self.assertRegex(url, r"^Kanban Board: http://127\.0\.0\.1:\d+$")

@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from bot_todo.config import RepositoryCollection
 from bot_todo.repository import (
     PRIORITY_HEADINGS,
     SIMPLE_TAG,
@@ -45,31 +46,32 @@ SECURITY_HEADERS = (
 
 
 class KanbanWebApp:
-    """Render one Task Repository as a local Kanban Board.
+    """Render a Kanban Board over a launch repository and collection.
 
     Args:
-        store: Repository read and mutated by the board.
-        name: Configured Repository Name, when selected by name.
+        store: Launch Task Repository, or ``None`` when the launch selection
+            is All.
+        collection: Immutable Repository Collection loaded before bind.
         csrf_token: Token override used by deterministic tests.
     """
 
     def __init__(
         self,
-        store: TodoStore,
-        name: str | None = None,
+        store: TodoStore | None,
+        collection: RepositoryCollection,
         csrf_token: str | None = None,
     ) -> None:
-        """Initialize a board over one repository.
+        """Initialize a board over one launch selection and collection.
 
         Args:
-            store: Repository read and mutated by the board.
-            name: Configured Repository Name, when selected by name.
+            store: Launch Task Repository, or ``None`` when All is selected.
+            collection: Immutable Repository Collection loaded before bind.
             csrf_token: Token override used by deterministic tests.
         """
-        #: Repository read and mutated by the board.
+        #: Launch Task Repository, or ``None`` when All is selected.
         self.store = store
-        #: Configured Repository Name, when selected by name.
-        self.name = name
+        #: Immutable Repository Collection loaded before the server binds.
+        self.collection = collection
         #: Secret required by every state-changing form.
         self.csrf_token = csrf_token or secrets.token_urlsafe(32)
         #: Exact origin assigned after the loopback socket binds.
@@ -124,6 +126,7 @@ class KanbanWebApp:
         Returns:
             Complete board HTML document.
         """
+        assert self.store is not None
         snapshot = self.store.snapshot()
         writable = snapshot.document.format_version == WRITE_FORMAT_VERSION
         active = [
@@ -233,6 +236,7 @@ class KanbanWebApp:
             raise TodoError("choose acceptance or simple, not both", "usage")
         tags = [value.strip() for value in fields.get("tags", "").split(",")]
         blockers = [value.strip() for value in fields.get("blocked_by", "").split(",")]
+        assert self.store is not None
         with self.store.transaction() as transaction:
             return transaction.add(
                 title=fields.get("title", ""),
@@ -285,6 +289,7 @@ class KanbanWebApp:
             for value in fields.get("blocked_by", "").split(",")
             if value.strip()
         ]
+        assert self.store is not None
         current = self.store.snapshot().find(task_id)
         current_tags = list(current.user_tags) if current is not None else []
         add_tags = [tag for tag in submitted if tag not in current_tags]
@@ -325,6 +330,7 @@ class KanbanWebApp:
             TodoError: If the action is unsupported or invalid for the task.
         """
         action = fields.get("action")
+        assert self.store is not None
         with self.store.transaction() as transaction:
             if action == "review":
                 return transaction.review(task_id)
@@ -966,26 +972,26 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_web(
-    store: TodoStore,
+    store: TodoStore | None,
     *,
-    name: str | None,
+    collection: RepositoryCollection,
     port: int,
     open_browser: bool,
 ) -> None:
-    """Serve one repository until interrupted.
+    """Serve the Kanban Board until interrupted.
 
     Side Effects:
         Will bind a loopback socket and may open the default browser.
 
     Args:
-        store: Repository served by the board.
+        store: Launch Task Repository, or ``None`` when All is selected.
 
     Keyword Args:
-        name: Configured Repository Name, when selected by name.
+        collection: Immutable Repository Collection loaded before bind.
         port: Requested loopback TCP port.
         open_browser: Whether to open the board after binding.
     """
-    app = KanbanWebApp(store, name)
+    app = KanbanWebApp(store, collection)
     with app.create_server(port) as server:
         print(f"Kanban Board: {app.origin}")
         if open_browser:

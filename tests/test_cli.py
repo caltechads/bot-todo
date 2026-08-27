@@ -554,20 +554,121 @@ class SelectionTests(TodoCliTestCase):
 
 
 class WebCommandTests(TodoCliTestCase):
-    """Verify the human-only single-repository web command contract."""
+    """Verify the human-only web command contract."""
 
-    def test_web_rejects_aggregate_and_json_modes(self) -> None:
-        """Catch web accidentally entering aggregate or machine-output flows."""
-        aggregate = invoke("--all", "web", "--no-open")
+    def setUp(self) -> None:
+        """Create an isolated repository and an empty default configuration."""
+        super().setUp()
+        self._config_home = tempfile.TemporaryDirectory()
+        self._config_patch = mock.patch.dict(
+            os.environ,
+            {"XDG_CONFIG_HOME": self._config_home.name},
+            clear=False,
+        )
+        self._config_patch.start()
+        os.environ.pop(CONFIG_ENV_VAR, None)
+
+    def tearDown(self) -> None:
+        """Restore configuration environment and remove the isolated root."""
+        self._config_patch.stop()
+        self._config_home.cleanup()
+        super().tearDown()
+
+    def test_web_rejects_json_mode(self) -> None:
+        """Catch web accidentally entering the machine-output flow."""
         machine = invoke(
             "--json", "--root", str(self.root), "web", "--no-open"
         )
 
-        self.assertEqual(aggregate.returncode, 2)
-        self.assertIn("--all does not support web", aggregate.stderr)
         self.assertEqual(machine.returncode, 2)
         self.assertEqual(json.loads(machine.stderr)["error"]["code"], "usage")
         self.assertIn("web does not support --json", machine.stderr)
+
+    @mock.patch("bot_todo.cli.run_web")
+    def test_all_web_passes_one_loaded_collection(self, run_web: mock.Mock) -> None:
+        """Catch All being rejected or dispatched without its collection."""
+        config = self.root / "config.toml"
+        config.write_text(
+            "schema_version = 1\n\n"
+            f'[[repositories]]\nname = "demo"\npath = "{self.root}"\n',
+            encoding="utf-8",
+        )
+
+        result = invoke(
+            "--config", str(config), "--all", "web", "--port", "0", "--no-open"
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIsNone(run_web.call_args.args[0])
+        collection = run_web.call_args.kwargs["collection"]
+        self.assertEqual([entry.name for entry in collection], ["demo"])
+        self.assertEqual(run_web.call_args.kwargs["port"], 0)
+        self.assertFalse(run_web.call_args.kwargs["open_browser"])
+
+    @mock.patch("bot_todo.cli.run_web")
+    def test_all_web_with_missing_default_config_passes_an_empty_collection(
+        self, run_web: mock.Mock
+    ) -> None:
+        """Catch --all web still requiring an explicit configuration file."""
+        result = invoke("--all", "web", "--no-open")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIsNone(run_web.call_args.args[0])
+        self.assertEqual(len(run_web.call_args.kwargs["collection"]), 0)
+
+    @mock.patch("bot_todo.cli.run_web")
+    def test_repo_web_passes_the_named_entry_and_collection(
+        self, run_web: mock.Mock
+    ) -> None:
+        """Catch --repo web dropping the collection or resolving the wrong path."""
+        config = self.root / "config.toml"
+        config.write_text(
+            "schema_version = 1\n\n"
+            f'[[repositories]]\nname = "demo"\npath = "{self.root}"\n',
+            encoding="utf-8",
+        )
+
+        result = invoke(
+            "--config", str(config), "--repo", "demo", "web", "--no-open"
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(run_web.call_args.args[0].root, self.root)
+        self.assertEqual(
+            [entry.name for entry in run_web.call_args.kwargs["collection"]],
+            ["demo"],
+        )
+
+    @mock.patch("bot_todo.cli.run_web")
+    def test_root_web_accepts_an_explicit_menu_configuration(
+        self, run_web: mock.Mock
+    ) -> None:
+        """Catch --config remaining coupled to --repo and --all for web."""
+        config = self.root / "config.toml"
+        config.write_text("schema_version = 1\n", encoding="utf-8")
+
+        result = invoke(
+            "--config", str(config), "--root", str(self.root), "web", "--no-open"
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(run_web.call_args.args[0].root, self.root)
+        self.assertEqual(len(run_web.call_args.kwargs["collection"]), 0)
+
+    @mock.patch("bot_todo.cli.run_web")
+    def test_explicit_web_configuration_fails_before_the_server_binds(
+        self, run_web: mock.Mock
+    ) -> None:
+        """Catch malformed --config reaching run_web."""
+        config = self.root / "config.toml"
+        config.write_text("this is not toml = [\n", encoding="utf-8")
+
+        result = invoke(
+            "--config", str(config), "--root", str(self.root), "web", "--no-open"
+        )
+
+        self.assertEqual(result.returncode, 1)
+        run_web.assert_not_called()
 
     @mock.patch("bot_todo.cli.run_web")
     def test_web_selects_one_repository_and_passes_launch_options(
@@ -579,10 +680,10 @@ class WebCommandTests(TodoCliTestCase):
         self.assertEqual(result.returncode, 0)
         store = run_web.call_args.args[0]
         self.assertEqual(store.root, self.root)
-        self.assertEqual(
-            run_web.call_args.kwargs,
-            {"name": None, "port": 0, "open_browser": False},
-        )
+        collection = run_web.call_args.kwargs["collection"]
+        self.assertEqual(len(collection), 0)
+        self.assertEqual(run_web.call_args.kwargs["port"], 0)
+        self.assertFalse(run_web.call_args.kwargs["open_browser"])
 
     def test_web_rejects_a_port_outside_the_tcp_range(self) -> None:
         """Catch invalid numeric ports reaching socket binding."""

@@ -7,10 +7,11 @@ import html
 import re
 import secrets
 import webbrowser
+from dataclasses import dataclass
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
 from bot_todo.config import RepositoryCollection
 from bot_todo.repository import (
@@ -45,6 +46,24 @@ SECURITY_HEADERS = (
 )
 
 
+@dataclass(frozen=True)
+class BoardSelection:
+    """Identify one request's Kanban Board selection.
+
+    Args:
+        key: Query value identifying All, Current, or a Repository Entry.
+        name: Configured Repository Name, or ``None`` for All and Current.
+        store: Selected Task Repository, or ``None`` for All.
+    """
+
+    #: Query value identifying the selection.
+    key: str
+    #: Configured Repository Name, when one entry is selected.
+    name: str | None
+    #: Selected Task Repository; ``None`` means All.
+    store: TodoStore | None
+
+
 class KanbanWebApp:
     """Render a Kanban Board over a launch repository and collection.
 
@@ -76,6 +95,77 @@ class KanbanWebApp:
         self.csrf_token = csrf_token or secrets.token_urlsafe(32)
         #: Exact origin assigned after the loopback socket binds.
         self.origin = ""
+        #: Launch selection used for bare ``/`` and unmatched Current.
+        self.default_selection = self._launch_selection(store, collection)
+
+    def _launch_selection(
+        self, store: TodoStore | None, collection: RepositoryCollection
+    ) -> BoardSelection:
+        """Derive the immutable launch selection from constructor facts.
+
+        Args:
+            store: Launch Task Repository, or ``None`` for All.
+            collection: Immutable Repository Collection loaded before bind.
+
+        Returns:
+            All, a matching configured entry, or Current for an unmatched path.
+        """
+        if store is None:
+            return BoardSelection("all", None, None)
+        for entry in collection:
+            if entry.path == store.root:
+                return BoardSelection(entry.name, entry.name, store)
+        return BoardSelection("current", None, store)
+
+    def resolve_selection(self, query: str) -> BoardSelection | None:
+        """Resolve one request's ``repo`` query.
+
+        Args:
+            query: Raw query string from ``urlsplit(self.path).query``.
+
+        Returns:
+            The launch selection when ``query`` is empty, a concrete selection
+            for one valid ``repo`` value, or ``None`` for any invalid query.
+        """
+        if query == "":
+            return self.default_selection
+        try:
+            parsed = parse_qs(
+                query,
+                keep_blank_values=True,
+                strict_parsing=True,
+                max_num_fields=1,
+            )
+        except ValueError:
+            return None
+        values = parsed.get("repo")
+        if list(parsed.keys()) != ["repo"] or values is None or len(values) != 1:
+            return None
+        key = values[0]
+        if key == "all":
+            return BoardSelection("all", None, None)
+        if key == "current":
+            if self.default_selection.key != "current":
+                return None
+            return self.default_selection
+        if not key:
+            return None
+        try:
+            entry = self.collection.entry(key)
+        except TodoError:
+            return None
+        return BoardSelection(entry.name, entry.name, TodoStore(entry.path))
+
+    def selection_path(self, selection: BoardSelection) -> str:
+        """Build the canonical path for one board selection.
+
+        Args:
+            selection: Selection to encode.
+
+        Returns:
+            Root board path with one encoded ``repo`` query.
+        """
+        return f"/?{urlencode({'repo': selection.key})}"
 
     def create_server(self, port: int) -> ThreadingHTTPServer:
         """Bind an HTTP server to loopback.
@@ -117,35 +207,71 @@ class KanbanWebApp:
         self.origin = f"http://127.0.0.1:{server.server_port}"
         return server
 
-    def render_board(self) -> str:
+    def render_board(self, selection: BoardSelection) -> str:
         """Render all recent tasks in Task State columns.
 
         Side Effects:
-            Reads the selected Task Repository.
+            Reads the selected Task Repository, or none when All is selected.
+
+        Args:
+            selection: Request-local board selection.
 
         Returns:
             Complete board HTML document.
         """
-        assert self.store is not None
-        snapshot = self.store.snapshot()
-        writable = snapshot.document.format_version == WRITE_FORMAT_VERSION
-        active = [
-            task
-            for priority in PRIORITY_HEADINGS
-            for task in snapshot.document.active[priority]
-        ]
-        columns = (
-            ("Open", [task for task in active if task.state == "open"]),
-            ("Review", [task for task in active if task.state == "review"]),
-            (
-                "Completed",
-                [task for task in snapshot.document.done if task.state == "completed"],
-            ),
-            (
-                "Cancelled",
-                [task for task in snapshot.document.done if task.state == "cancelled"],
-            ),
-        )
+        columns: tuple[tuple[str, list[Task]], ...]
+        if selection.store is None:
+            columns = (
+                ("Open", []),
+                ("Review", []),
+                ("Completed", []),
+                ("Cancelled", []),
+            )
+            writable = True
+            header_action = ""
+            mutation_area = ""
+        else:
+            snapshot = selection.store.snapshot()
+            writable = snapshot.document.format_version == WRITE_FORMAT_VERSION
+            active = [
+                task
+                for priority in PRIORITY_HEADINGS
+                for task in snapshot.document.active[priority]
+            ]
+            columns = (
+                ("Open", [task for task in active if task.state == "open"]),
+                ("Review", [task for task in active if task.state == "review"]),
+                (
+                    "Completed",
+                    [
+                        task
+                        for task in snapshot.document.done
+                        if task.state == "completed"
+                    ],
+                ),
+                (
+                    "Cancelled",
+                    [
+                        task
+                        for task in snapshot.document.done
+                        if task.state == "cancelled"
+                    ],
+                ),
+            )
+            if writable:
+                header_action = (
+                    '<button class="btn btn-primary" type="button" data-bs-toggle="modal" '
+                    'data-bs-target="#add-task-modal"><i class="ti ti-plus" '
+                    'aria-hidden="true"></i> New task</button>'
+                )
+                mutation_area = self._render_add_form()
+            else:
+                header_action = ""
+                mutation_area = (
+                    '<p role="status" class="alert alert-warning"><i class="ti ti-lock" '
+                    'aria-hidden="true"></i> This repository is read-only. '
+                    "Run <code>bot-todo migrate</code> to enable board mutations.</p>"
+                )
         columns_html = "".join(
             self._render_column(heading, tasks, writable=writable)
             for heading, tasks in columns
@@ -155,32 +281,28 @@ class KanbanWebApp:
             for _, tasks in columns
             for task in tasks
         )
-        if writable:
-            header_action = (
-                '<button class="btn btn-primary" type="button" data-bs-toggle="modal" '
-                'data-bs-target="#add-task-modal"><i class="ti ti-plus" '
-                'aria-hidden="true"></i> New task</button>'
-            )
-            mutation_area = self._render_add_form()
-        else:
-            header_action = ""
-            mutation_area = (
-                '<p role="status" class="alert alert-warning"><i class="ti ti-lock" '
-                'aria-hidden="true"></i> This repository is read-only. '
-                "Run <code>bot-todo migrate</code> to enable board mutations.</p>"
-            )
         content = (
             f"{mutation_area}{detail_modals}"
             f'<div class="board-columns">{columns_html}</div>'
         )
-        return self._page("Kanban Board", content, header_action=header_action)
+        return self._page(
+            "Kanban Board",
+            content,
+            selection=selection,
+            header_action=header_action,
+        )
 
-    def render_not_found(self) -> str:
+    def render_not_found(self, selection: BoardSelection | None = None) -> str:
         """Render the generic missing-page response.
+
+        Args:
+            selection: Selection used for the repository menu.
 
         Returns:
             Complete error HTML document.
         """
+        if selection is None:
+            selection = self.default_selection
         return self._page(
             "Not found",
             '<div class="card"><div class="card-body text-center py-6">'
@@ -188,18 +310,27 @@ class KanbanWebApp:
             '<h1 class="h2 mt-2">Not found</h1>'
             '<p class="text-secondary mb-0">The requested page does not exist.</p>'
             "</div></div>",
+            selection=selection,
         )
 
-    def render_error(self, title: str, message: str) -> str:
+    def render_error(
+        self,
+        title: str,
+        message: str,
+        selection: BoardSelection | None = None,
+    ) -> str:
         """Render one concise error page.
 
         Args:
             title: Human-readable error title.
             message: Safe error explanation.
+            selection: Selection used for the repository menu.
 
         Returns:
             Complete escaped error HTML document.
         """
+        if selection is None:
+            selection = self.default_selection
         content = (
             '<div class="card"><div class="card-body">'
             f'<h1 class="h2">{html.escape(title)}</h1>'
@@ -207,7 +338,7 @@ class KanbanWebApp:
             '<a class="btn btn-primary" href="/">Return to Kanban Board</a>'
             "</div></div>"
         )
-        return self._page(title, content)
+        return self._page(title, content, selection=selection)
 
     def add_task(self, fields: dict[str, str]) -> Task:
         """Add one task from browser form fields.
@@ -708,7 +839,69 @@ class KanbanWebApp:
             f'<input type="hidden" name="_csrf" value="{html.escape(self.csrf_token)}">'
         )
 
-    def _page(self, title: str, content: str, *, header_action: str = "") -> str:
+    def _selection_label(self, selection: BoardSelection) -> str:
+        """Return the dropdown label for one selection.
+
+        Args:
+            selection: Selection whose visible name should be shown.
+
+        Returns:
+            ``All``, ``Current``, or the configured Repository Name.
+        """
+        if selection.key == "all":
+            return "All"
+        if selection.key == "current":
+            return "Current"
+        return selection.name or selection.key
+
+    def _render_repository_menu(self, selection: BoardSelection) -> str:
+        """Render the Tabler repository dropdown.
+
+        Args:
+            selection: Currently displayed board selection.
+
+        Returns:
+            Navbar dropdown markup listing All, configured entries, and Current.
+        """
+        items = [
+            (
+                "All",
+                self.selection_path(BoardSelection("all", None, None)),
+            )
+        ]
+        items.extend(
+            (entry.name, self.selection_path(BoardSelection(entry.name, entry.name, None)))
+            for entry in self.collection
+        )
+        if self.default_selection.key == "current":
+            items.append(
+                (
+                    "Current",
+                    self.selection_path(self.default_selection),
+                )
+            )
+        options = "".join(
+            f'<a class="dropdown-item" href="{html.escape(path, quote=True)}">'
+            f"{html.escape(label)}</a>"
+            for label, path in items
+        )
+        label = html.escape(self._selection_label(selection))
+        return (
+            '<div class="dropdown ms-3">'
+            '<button class="btn dropdown-toggle" type="button" '
+            'data-bs-toggle="dropdown" aria-expanded="false">'
+            f"{label}</button>"
+            f'<div class="dropdown-menu">{options}</div></div>'
+        )
+
+    def _page(
+        self,
+        title: str,
+        content: str,
+        *,
+        selection: BoardSelection,
+        header_action: str = "",
+    ) -> str:
         """Wrap content in the shared HTML document.
 
         Args:
@@ -716,11 +909,13 @@ class KanbanWebApp:
             content: Trusted application-rendered markup.
 
         Keyword Args:
+            selection: Selection whose menu and label should be shown.
             header_action: Trusted application-rendered navbar action.
 
         Returns:
             Complete HTML document.
         """
+        menu = self._render_repository_menu(selection)
         return (
             '<!doctype html><html lang="en"><head>'
             '<meta charset="utf-8"><meta name="viewport" '
@@ -738,6 +933,7 @@ class KanbanWebApp:
             "@media(max-width:1199px){.board-columns{grid-template-columns:repeat(2,minmax(14rem,1fr))}}"
             "@media(max-width:767px){.board-columns{grid-template-columns:1fr}.board-column{min-height:0}}"
             '</style></head><body><div class="page"><header class="navbar navbar-expand-md navbar-light py-3"><div class="container-xl"><a class="navbar-brand fs-2" href="/"><i class="ti ti-robot text-primary fs-2" aria-hidden="true"></i> bot-todo</a><span class="navbar-text border-start ps-3 ms-3 fs-3 d-none d-sm-inline">Kanban Board</span>'
+            f"{menu}"
             f'<div class="ms-auto">{header_action}</div></div></header><div class="page-wrapper">'
             '<main class="page-body"><div class="container-xl">'
             f"{content}</div></main></div></div>"
@@ -779,18 +975,27 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
         """
         if not self._trusted_host():
             self._send_html(
-                403, self.app.render_error("Forbidden", "Request host not allowed.")
+                403,
+                self.app.render_error(
+                    "Forbidden",
+                    "Request host not allowed.",
+                    self.app.default_selection,
+                ),
             )
             return
-        path = urlsplit(self.path).path
+        parts = urlsplit(self.path)
+        selection = self.app.resolve_selection(parts.query)
+        if selection is None:
+            self._send_html(404, self.app.render_not_found(self.app.default_selection))
+            return
         try:
-            if path == "/":
-                self._send_html(200, self.app.render_board())
+            if parts.path == "/":
+                self._send_html(200, self.app.render_board(selection))
                 return
         except TodoError as error:
             self._send_todo_error(error)
             return
-        self._send_html(404, self.app.render_not_found())
+        self._send_html(404, self.app.render_not_found(selection))
 
     def do_POST(self) -> None:
         """Apply one board mutation.
@@ -993,9 +1198,10 @@ def run_web(
     """
     app = KanbanWebApp(store, collection)
     with app.create_server(port) as server:
-        print(f"Kanban Board: {app.origin}")
+        url = f"{app.origin}{app.selection_path(app.default_selection)}"
+        print(f"Kanban Board: {url}")
         if open_browser:
-            webbrowser.open(app.origin)
+            webbrowser.open(url)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

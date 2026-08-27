@@ -7,12 +7,14 @@ import errno
 import http.client
 import io
 import socket
+import tempfile
 import threading
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
-from bot_todo.config import RepositoryCollection
+from bot_todo.config import RepositoryCollection, RepositoryEntry
 from bot_todo.repository import TodoError, TodoStore
 from bot_todo.web import KanbanWebApp, run_web
 from tests.support import TodoCliTestCase
@@ -124,6 +126,112 @@ class KanbanWebTests(TodoCliTestCase):
                 "Origin": self.app.origin,
             },
         )
+
+    def test_repository_menu_uses_configured_name_and_all_links(self) -> None:
+        """Catch a local configured path rendered as duplicate Current."""
+        collection = RepositoryCollection(
+            (
+                RepositoryEntry("alpha.one", self.root),
+                RepositoryEntry("beta", self.root.parent / "beta"),
+            )
+        )
+        app = KanbanWebApp(self.store, collection, csrf_token="test-token")
+
+        launch = app.resolve_selection("")
+        self.assertIsNotNone(launch)
+        assert launch is not None
+        self.assertEqual(launch.key, "alpha.one")
+        named = app.resolve_selection("repo=alpha.one")
+        self.assertIsNotNone(named)
+        assert named is not None
+        body = app.render_board(named)
+        self.assertIn("/?repo=all", body)
+        self.assertIn("/?repo=alpha.one", body)
+        self.assertIn("/?repo=beta", body)
+        self.assertNotIn(">Current<", body)
+
+    def test_unconfigured_launch_repository_adds_current(self) -> None:
+        """Catch loss of an existing local/root web launch."""
+        app = KanbanWebApp(
+            self.store,
+            RepositoryCollection(()),
+            csrf_token="test-token",
+        )
+
+        launch = app.resolve_selection("")
+        self.assertIsNotNone(launch)
+        assert launch is not None
+        self.assertEqual(launch.key, "current")
+        current = app.resolve_selection("repo=current")
+        self.assertIsNotNone(current)
+        assert current is not None
+        self.assertIsNotNone(current.store)
+        assert current.store is not None
+        self.assertEqual(current.store.root, self.root)
+        self.assertIsNone(app.resolve_selection("repo=missing"))
+
+    def test_invalid_repository_query_returns_generic_not_found(self) -> None:
+        """Catch malformed repo queries becoming 500s or leaking selector details."""
+        for path in (
+            "/?repo=missing",
+            "/?repo=",
+            "/?repo=all&repo=beta",
+            "/?repo",
+            "/?other=beta",
+        ):
+            with self.subTest(path=path):
+                status, _, body = self.get(path)
+                self.assertEqual(status, 404)
+                self.assertIn("The requested page does not exist.", body)
+                self.assertNotIn("Traceback", body)
+
+    def test_selected_repository_query_renders_that_repository(self) -> None:
+        """Catch /?repo= rendering the launch repository instead of the named one."""
+        with tempfile.TemporaryDirectory() as beta_directory:
+            beta_root = Path(beta_directory).resolve()
+            beta_store = TodoStore(beta_root)
+            beta_store.initialize("Beta")
+            with beta_store.transaction() as transaction:
+                transaction.add(
+                    title="Beta only work",
+                    priority="P2",
+                    task_type="chore",
+                    simple=True,
+                )
+            with self.store.transaction() as transaction:
+                transaction.add(
+                    title="Launch only work",
+                    priority="P2",
+                    task_type="chore",
+                    simple=True,
+                )
+            collection = RepositoryCollection(
+                (
+                    RepositoryEntry("alpha.one", self.root),
+                    RepositoryEntry("beta", beta_root),
+                )
+            )
+            app = KanbanWebApp(self.store, collection, csrf_token="test-token")
+            server = app.create_server(0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1", server.server_port
+                )
+                connection.request("GET", "/?repo=beta")
+                response = connection.getresponse()
+                status = response.status
+                body = response.read().decode()
+                connection.close()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
+
+        self.assertEqual(status, 200)
+        self.assertIn("Beta only work", body)
+        self.assertNotIn("Launch only work", body)
 
     def test_board_groups_tasks_by_state_and_escapes_content(self) -> None:
         """Catch missing columns, wrong state grouping, and unescaped titles."""
@@ -943,7 +1051,10 @@ class KanbanWebTests(TodoCliTestCase):
             )
 
         url = output.getvalue().strip()
-        self.assertRegex(url, r"^Kanban Board: http://127\.0\.0\.1:\d+$")
+        self.assertRegex(
+            url,
+            r"^Kanban Board: http://127\.0\.0\.1:\d+/\?repo=current$",
+        )
         open_browser.assert_called_once_with(url.removeprefix("Kanban Board: "))
 
     def test_closed_task_detail_modal_stays_read_only(self) -> None:

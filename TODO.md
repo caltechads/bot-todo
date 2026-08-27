@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 18 -->
+<!-- todo-format: 2; next-id: 19 -->
 
 ## P0 — Critical / Blocking
 
@@ -12,6 +12,11 @@
   - Review: 2026-08-20
 
 ## P2 — Backlog
+
+- [ ] **T018** Web command repo switcher across global config repos #feature
+  - Acceptance: Web UI shows a repo menu listing 'All' plus each repo from the global config; selecting a repo shows only that repo's tasks; selecting 'All' shows the aggregated tasks of every configured repo, each labeled with its repository.
+  - Context: Spec: .scratch/kanban-web-frontend/spec.md ADR: docs/adr/0011-keep-collection-kanban-selection-request-scoped-and-read-only.md Plan: .scratch/kanban-web-frontend/t018-repository-switcher-plan.md
+  - Review: 2026-08-26
 
 ## Done (recent)
 

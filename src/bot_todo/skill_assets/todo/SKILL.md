@@ -105,10 +105,9 @@ Only when the person explicitly asks for every project:
 bot-todo --json --all list
 ```
 
-`list`, `critical`, and `actionable` accept `--all`. Aggregate results name
-the repository each task came from, order priority first and configuration
-order second, and refuse to answer at all — exiting 3 — when any configured
-repository cannot be read. No mutation accepts `--all`.
+`list`, `critical`, `actionable`, and the human-only `web` command accept
+`--all`. Aggregate task-query results name each source repository; the All
+Kanban Board is read-only. No mutation accepts `--all`.
 
 Completion and cancellation retain the ID and move the task to Done. The CLI
 keeps the newest 20 closed tasks there and retires older entries to the archive,

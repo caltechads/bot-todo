@@ -106,7 +106,7 @@ bot-todo [--json] [--config PATH] [--root PATH | --repo NAME | --all] COMMAND ..
 | `cancel TASK_ID --reason TEXT` | Mark an open or review task cancelled |
 | `archive` | Move older Done tasks into the archive |
 | `migrate` | Upgrade the task data format to 2 |
-| `web [--port PORT] [--no-open]` | Serve one repository as a local Kanban Board |
+| `web [--port PORT] [--no-open]` | Serve a Kanban Board that switches among configured repositories and All |
 | `repos path` | Show the active configuration path |
 | `repos list` | List configured repositories |
 | `repos add [PATH]` | Add a repository entry; PATH defaults to `.` |
@@ -141,28 +141,37 @@ bot-todo cancel T004 --reason "Superseded by T003"
 
 ### Local Kanban Board
 
-Serve the selected Task Repository in a browser:
+Serve a Kanban Board that can switch among configured repositories and All:
 
 ```bash
 bot-todo web
-bot-todo --root ~/Programming/bot_todo web --port 8765 --no-open
+bot-todo --config ~/.config/bot-todo/config.toml --root ~/Programming/bot_todo web
 bot-todo --repo bot-todo web
+bot-todo --all web
 ```
 
 The server binds only to `127.0.0.1`, prints its URL, and opens the default
 browser unless `--no-open` is supplied. Port `8765` is the default; port `0`
 asks the operating system to choose an available port. If that port is already
 in use, the command exits with an error naming 127.0.0.1 and the port and
-suggests retrying with --port PORT or --port 0. `web` manages one Task
-Repository and rejects `--all` and `--json`.
+suggests retrying with --port PORT or --port 0. `web` rejects `--json`.
+`--config PATH` selects the menu collection for every launch form, including
+`--root` and local discovery.
 
-The Kanban Board groups recent tasks into Open, Review, Completed, and
-Cancelled columns. Card titles open that task's details in a modal. It can
-add tasks, edit Open and Review tasks in the detail modal, move Open work to
-Review, reopen Review work, and complete or cancel Open or Review work.
-Claims, full-archive browsing, and multi-repository boards remain CLI-only.
-A Task Data Format 1 repository is displayed read-only with instructions to
-run `bot-todo migrate`.
+A dropdown lists `All`, each configured Repository Name in configuration
+order, and `Current` when the launch path is not a configured entry. `All`
+shows Open, Review, recent Completed, and recent Cancelled tasks from every
+configured repository. Open and Review order by priority, then configuration
+order, then task-file order. Completed and Cancelled order by configuration
+order, then each file's Done order. Each All card is labeled with its
+Repository Name. If any configured repository cannot be read, All fails
+without partial cards. All is read-only and shows
+`All repositories is read-only. Select a repository to make changes.`
+Collection-wide mutations remain CLI-inexpressible and are disabled in the
+browser. Select one repository to add, edit, review, reopen, complete, or
+cancel work. Claims and full-archive browsing remain CLI-only. A Task Data
+Format 1 repository is displayed read-only with instructions to run
+`bot-todo migrate`.
 
 This is a local human interface, not a remotely deployable service. It has no
 authentication and deliberately provides no option to bind beyond loopback.
@@ -174,7 +183,7 @@ authentication and deliberately provides no option to bind beyond loopback.
 | *(none)* | Nearest ancestor `TODO.md`; `init` uses the current directory | Task commands |
 | `--root PATH` | Exact directory | Task commands |
 | `--repo NAME` | One named entry from configuration | Task commands |
-| `--all` | Every configured repository | `list`, `critical`, `actionable` only |
+| `--all` | Every configured repository | `list`, `critical`, `actionable`, and human-only `web` |
 
 `--root`, `--repo`, and `--all` are mutually exclusive. `install-skill` and
 `snippet` accept none of them. `repos` accepts `--config` and rejects the other
@@ -219,7 +228,8 @@ If any configured repository cannot be read, the command prints no task data
 and exits `3`.
 
 A missing default config is an empty collection. Local discovery and `--root`
-never load configuration.
+never load configuration except for `web`, which loads the collection for the
+repository menu.
 
 Manage the collection without editing the file by hand:
 

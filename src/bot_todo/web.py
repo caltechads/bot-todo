@@ -64,6 +64,21 @@ class BoardSelection:
     store: TodoStore | None
 
 
+@dataclass(frozen=True)
+class BoardTask:
+    """Pair a board-visible Task with optional Repository Name provenance.
+
+    Args:
+        task: Task rendered on the board.
+        repository_name: Source Repository Name on All, otherwise ``None``.
+    """
+
+    #: Task rendered on the board.
+    task: Task
+    #: Source Repository Name on a collection-wide board.
+    repository_name: str | None = None
+
+
 class KanbanWebApp:
     """Render a Kanban Board over a launch repository and collection.
 
@@ -207,6 +222,87 @@ class KanbanWebApp:
         self.origin = f"http://127.0.0.1:{server.server_port}"
         return server
 
+    def _modal_id(self, row: BoardTask) -> str:
+        """Build a collision-proof modal id for one board row.
+
+        Args:
+            row: Board row receiving the id.
+
+        Returns:
+            Existing task-only id for one repository, or a repository-qualified
+            id for All.
+        """
+        if row.repository_name is None:
+            return f"task-{row.task.task_id}-modal"
+        encoded_name = row.repository_name.encode("utf-8").hex()
+        return f"task-{encoded_name}-{row.task.task_id}-modal"
+
+    def _collection_columns(self) -> tuple[tuple[str, list[BoardTask]], ...]:
+        """Project every configured repository onto the four board columns.
+
+        Side Effects:
+            Reads every configured Task Repository.
+
+        Returns:
+            Open, Review, Completed, and Cancelled rows in board order.
+
+        Raises:
+            TodoError: If any configured repository cannot be read.
+        """
+        # ponytail: keep the four-state board projection local; extract it only
+        # when a third collection consumer needs the same contract.
+        snapshots: list[tuple[str, Any]] = []
+        failures: list[dict[str, str]] = []
+        for entry in self.collection:
+            try:
+                snapshot = TodoStore(entry.path).snapshot()
+            except (TodoError, OSError) as error:
+                failures.append(
+                    {
+                        "name": entry.name,
+                        "path": str(entry.path),
+                        "code": error.code
+                        if isinstance(error, TodoError)
+                        else "io_error",
+                        "message": str(error),
+                    }
+                )
+            else:
+                snapshots.append((entry.name, snapshot))
+        if failures:
+            named = ", ".join(f"{one['name']} ({one['code']})" for one in failures)
+            raise TodoError(
+                f"{len(failures)} of {len(self.collection)} repositories failed: "
+                f"{named}",
+                "aggregate_partial_failure",
+                {"failures": failures},
+            )
+        open_rows: list[BoardTask] = []
+        review_rows: list[BoardTask] = []
+        for priority in PRIORITY_HEADINGS:
+            for name, snapshot in snapshots:
+                for task in snapshot.document.active[priority]:
+                    row = BoardTask(task, name)
+                    if task.state == "open":
+                        open_rows.append(row)
+                    elif task.state == "review":
+                        review_rows.append(row)
+        completed_rows: list[BoardTask] = []
+        cancelled_rows: list[BoardTask] = []
+        for name, snapshot in snapshots:
+            for task in snapshot.document.done:
+                row = BoardTask(task, name)
+                if task.state == "completed":
+                    completed_rows.append(row)
+                elif task.state == "cancelled":
+                    cancelled_rows.append(row)
+        return (
+            ("Open", open_rows),
+            ("Review", review_rows),
+            ("Completed", completed_rows),
+            ("Cancelled", cancelled_rows),
+        )
+
     def render_board(self, selection: BoardSelection) -> str:
         """Render all recent tasks in Task State columns.
 
@@ -219,17 +315,16 @@ class KanbanWebApp:
         Returns:
             Complete board HTML document.
         """
-        columns: tuple[tuple[str, list[Task]], ...]
+        columns: tuple[tuple[str, list[BoardTask]], ...]
         if selection.store is None:
-            columns = (
-                ("Open", []),
-                ("Review", []),
-                ("Completed", []),
-                ("Cancelled", []),
-            )
-            writable = True
+            columns = self._collection_columns()
+            writable = False
             header_action = ""
-            mutation_area = ""
+            mutation_area = (
+                '<p role="status" class="alert alert-info"><i class="ti ti-lock" '
+                'aria-hidden="true"></i> All repositories is read-only. '
+                "Select a repository to make changes.</p>"
+            )
         else:
             snapshot = selection.store.snapshot()
             writable = snapshot.document.format_version == WRITE_FORMAT_VERSION
@@ -239,12 +334,26 @@ class KanbanWebApp:
                 for task in snapshot.document.active[priority]
             ]
             columns = (
-                ("Open", [task for task in active if task.state == "open"]),
-                ("Review", [task for task in active if task.state == "review"]),
+                (
+                    "Open",
+                    [
+                        BoardTask(task)
+                        for task in active
+                        if task.state == "open"
+                    ],
+                ),
+                (
+                    "Review",
+                    [
+                        BoardTask(task)
+                        for task in active
+                        if task.state == "review"
+                    ],
+                ),
                 (
                     "Completed",
                     [
-                        task
+                        BoardTask(task)
                         for task in snapshot.document.done
                         if task.state == "completed"
                     ],
@@ -252,7 +361,7 @@ class KanbanWebApp:
                 (
                     "Cancelled",
                     [
-                        task
+                        BoardTask(task)
                         for task in snapshot.document.done
                         if task.state == "cancelled"
                     ],
@@ -277,9 +386,9 @@ class KanbanWebApp:
             for heading, tasks in columns
         )
         detail_modals = "".join(
-            self._render_task_detail_modal(task, writable=writable)
+            self._render_task_detail_modal(row, writable=writable)
             for _, tasks in columns
-            for task in tasks
+            for row in tasks
         )
         content = (
             f"{mutation_area}{detail_modals}"
@@ -335,7 +444,9 @@ class KanbanWebApp:
             '<div class="card"><div class="card-body">'
             f'<h1 class="h2">{html.escape(title)}</h1>'
             f"<p>{html.escape(message)}</p>"
-            '<a class="btn btn-primary" href="/">Return to Kanban Board</a>'
+            f'<a class="btn btn-primary" href="'
+            f'{html.escape(self.selection_path(selection), quote=True)}">'
+            "Return to Kanban Board</a>"
             "</div></div>"
         )
         return self._page(title, content, selection=selection)
@@ -473,11 +584,11 @@ class KanbanWebApp:
                 return transaction.close(task_id, "cancelled", fields.get("reason"))
             raise TodoError("unknown transition action", "usage")
 
-    def _render_card(self, task: Task, *, writable: bool) -> str:
+    def _render_card(self, row: BoardTask, *, writable: bool) -> str:
         """Render one task card.
 
         Args:
-            task: Task displayed by the card.
+            row: Board row displayed by the card.
 
         Keyword Args:
             writable: Whether lifecycle forms may be rendered.
@@ -485,26 +596,36 @@ class KanbanWebApp:
         Returns:
             Escaped task card markup.
         """
+        task = row.task
         task_id = html.escape(task.task_id)
         title = html.escape(task.title)
+        modal_id = html.escape(self._modal_id(row), quote=True)
         actions = self._render_actions(task) if writable else ""
+        provenance = ""
+        if row.repository_name is not None:
+            provenance = (
+                f'<span class="badge bg-azure-lt">'
+                f"{html.escape(row.repository_name)}</span> "
+            )
         return (
             '<article class="card card-sm mb-2"><div class="card-body">'
             f'<button type="button" class="task-title" data-bs-toggle="modal" '
-            f'data-bs-target="#task-{task_id}-modal"><strong>{task_id}</strong> '
+            f'data-bs-target="#{modal_id}"><strong>{task_id}</strong> '
             f"{title}</button>"
-            '<div class="mt-2"><span class="badge bg-blue-lt">'
+            f'<div class="mt-2">{provenance}<span class="badge bg-blue-lt">'
             f"{html.escape(task.priority or task.state)}</span> "
             f'<span class="badge bg-secondary-lt">{html.escape(task.task_type or "untyped")}'
             f"</span></div>{actions}</div></article>"
         )
 
-    def _render_column(self, heading: str, tasks: list[Task], *, writable: bool) -> str:
+    def _render_column(
+        self, heading: str, tasks: list[BoardTask], *, writable: bool
+    ) -> str:
         """Render one responsive board column with bounded terminal cards.
 
         Args:
             heading: Human-readable task state heading.
-            tasks: Tasks assigned to the column.
+            tasks: Board rows assigned to the column.
 
         Keyword Args:
             writable: Whether lifecycle forms may be rendered.
@@ -532,13 +653,13 @@ class KanbanWebApp:
             ),
         }[state]
         visible = tasks if state not in {"completed", "cancelled"} else tasks[:6]
-        cards = "".join(self._render_card(task, writable=writable) for task in visible)
+        cards = "".join(self._render_card(row, writable=writable) for row in visible)
         overflow = tasks[6:] if state in {"completed", "cancelled"} else []
         if overflow:
             label = f"+ {len(overflow)} more {state} task{'s' if len(overflow) != 1 else ''}"
             cards += (
                 '<details class="terminal-overflow"><summary>'
-                f"{label}</summary>{''.join(self._render_card(task, writable=writable) for task in overflow)}"
+                f"{label}</summary>{''.join(self._render_card(row, writable=writable) for row in overflow)}"
                 "</details>"
             )
         if not cards:
@@ -555,11 +676,11 @@ class KanbanWebApp:
             f"{len(tasks)}</span></div>{cards}</section>"
         )
 
-    def _render_task_detail_modal(self, task: Task, *, writable: bool) -> str:
+    def _render_task_detail_modal(self, row: BoardTask, *, writable: bool) -> str:
         """Render one Tabler modal for a board-visible task.
 
         Args:
-            task: Task whose canonical fields are displayed or edited.
+            row: Board row whose canonical fields are displayed or edited.
 
         Keyword Args:
             writable: Whether open and review tasks may include an edit form.
@@ -567,22 +688,35 @@ class KanbanWebApp:
         Returns:
             Escaped modal markup matching the New task dismiss contract.
         """
-        if writable and task.state in {"open", "review"}:
-            return self._render_task_edit_modal(task)
-        return self._render_task_readonly_modal(task)
+        if writable and row.task.state in {"open", "review"}:
+            return self._render_task_edit_modal(row)
+        return self._render_task_readonly_modal(row)
 
-    def _render_task_readonly_modal(self, task: Task) -> str:
+    def _modal_heading(self, row: BoardTask) -> str:
+        """Build an escaped modal heading for one board row.
+
+        Args:
+            row: Board row whose heading is rendered.
+
+        Returns:
+            Escaped heading including Repository Name provenance on All.
+        """
+        heading = f"{html.escape(row.task.task_id)} — {html.escape(row.task.title)}"
+        if row.repository_name is not None:
+            heading = f"{html.escape(row.repository_name)} {heading}"
+        return heading
+
+    def _render_task_readonly_modal(self, row: BoardTask) -> str:
         """Render a read-only detail modal.
 
         Args:
-            task: Task whose canonical fields are displayed.
+            row: Board row whose canonical fields are displayed.
 
         Returns:
             Escaped modal markup with a definition list and Close control.
         """
-        task_id = html.escape(task.task_id)
-        title = html.escape(task.title)
-        modal_id = f"task-{task_id}-modal"
+        task = row.task
+        modal_id = html.escape(self._modal_id(row), quote=True)
         title_id = f"{modal_id}-title"
         values = (
             ("ID", task.task_id),
@@ -601,7 +735,7 @@ class KanbanWebApp:
             ("Closed", task.closed_on),
             ("Reason", task.reason),
         )
-        heading = f"{task_id} — {title}"
+        heading = self._modal_heading(row)
         return (
             f'<div class="modal modal-blur fade" id="{modal_id}" tabindex="-1" '
             f'aria-labelledby="{title_id}" aria-hidden="true">'
@@ -616,18 +750,19 @@ class KanbanWebApp:
             'data-bs-dismiss="modal">Close</button></div></div></div></div>'
         )
 
-    def _render_task_edit_modal(self, task: Task) -> str:
+    def _render_task_edit_modal(self, row: BoardTask) -> str:
         """Render a pre-filled edit form in the detail modal.
 
         Args:
-            task: Open or review task to edit.
+            row: Open or review board row to edit.
 
         Returns:
             Escaped modal markup posting to ``/tasks/{id}/edit``.
         """
+        task = row.task
         task_id = html.escape(task.task_id)
         title = html.escape(task.title)
-        modal_id = f"task-{task_id}-modal"
+        modal_id = html.escape(self._modal_id(row), quote=True)
         title_id = f"{modal_id}-title"
         metadata = (
             ("ID", task.task_id),
@@ -641,7 +776,7 @@ class KanbanWebApp:
             else ""
         )
         checked = " checked" if task.simple else ""
-        heading = f"{task_id} — {title}"
+        heading = self._modal_heading(row)
         return (
             f'<div class="modal modal-blur fade" id="{modal_id}" tabindex="-1" '
             f'aria-labelledby="{title_id}" aria-hidden="true">'
@@ -993,7 +1128,7 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
                 self._send_html(200, self.app.render_board(selection))
                 return
         except TodoError as error:
-            self._send_todo_error(error)
+            self._send_todo_error(error, selection)
             return
         self._send_html(404, self.app.render_not_found(selection))
 
@@ -1116,7 +1251,9 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
         """
         return self.headers.get("Host") == self.app.origin.removeprefix("http://")
 
-    def _send_todo_error(self, error: TodoError) -> None:
+    def _send_todo_error(
+        self, error: TodoError, selection: BoardSelection | None = None
+    ) -> None:
         """Map a repository error to a concise HTTP response.
 
         Side Effects:
@@ -1124,7 +1261,10 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
 
         Args:
             error: Repository failure to present.
+            selection: Selection used for the repository menu and return link.
         """
+        if selection is None:
+            selection = self.app.default_selection
         status = {
             "unknown_task": 404,
             "repository_not_found": 404,
@@ -1132,6 +1272,7 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
             "conflict": 409,
             "invalid_transition": 409,
             "migration_required": 409,
+            "aggregate_partial_failure": 500,
         }.get(error.code, 500)
         title = {
             400: "Bad request",
@@ -1139,7 +1280,9 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
             409: "Conflict",
             500: "Repository error",
         }[status]
-        self._send_html(status, self.app.render_error(title, str(error)))
+        self._send_html(
+            status, self.app.render_error(title, str(error), selection)
+        )
 
     def log_message(self, _format: str, *args: Any) -> None:
         """Suppress standard-library access logging.

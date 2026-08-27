@@ -6,9 +6,11 @@ import contextlib
 import errno
 import http.client
 import io
+import re
 import socket
 import tempfile
 import threading
+import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -1317,3 +1319,252 @@ class KanbanWebTests(TodoCliTestCase):
 
         self.assertEqual(status, 404)
         self.assertIn("The requested page does not exist", body)
+
+
+class CollectionKanbanWebTests(unittest.TestCase):
+    """Exercise a collection-wide Kanban Board through loopback HTTP."""
+
+    def setUp(self) -> None:
+        """Create two repositories and start an All-selection Kanban server."""
+        self._temporary_directory = tempfile.TemporaryDirectory()
+        root = Path(self._temporary_directory.name).resolve()
+        self.alpha = root / "alpha.one"
+        self.beta = root / "beta"
+        TodoStore(self.alpha).initialize("Alpha")
+        TodoStore(self.beta).initialize("Beta")
+        collection = RepositoryCollection(
+            (
+                RepositoryEntry("alpha.one", self.alpha),
+                RepositoryEntry("beta", self.beta),
+            )
+        )
+        self.app = KanbanWebApp(None, collection, csrf_token="test-token")
+        self.server = self.app.create_server(0)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.port = self.server.server_port
+
+    def tearDown(self) -> None:
+        """Stop the Kanban server and remove its repositories."""
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+        self._temporary_directory.cleanup()
+
+    def get(self, path: str) -> tuple[int, dict[str, str], str]:
+        """Request one board page.
+
+        Args:
+            path: Absolute request path.
+
+        Returns:
+            Status, response headers, and decoded body.
+        """
+        return self.request("GET", path)
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        body: str | bytes | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, str], str]:
+        """Send one raw request to the loopback server.
+
+        Args:
+            method: HTTP request method.
+            path: Absolute request path.
+            body: Optional request body.
+            headers: Optional request headers.
+
+        Returns:
+            Status, response headers, and decoded body.
+        """
+        connection = http.client.HTTPConnection("127.0.0.1", self.port)
+        connection.request(method, path, body, headers or {})
+        response = connection.getresponse()
+        body = response.read().decode()
+        headers = dict(response.getheaders())
+        connection.close()
+        return response.status, headers, body
+
+    def post(
+        self, path: str, fields: dict[str, str]
+    ) -> tuple[int, dict[str, str], str]:
+        """Submit one trusted board form.
+
+        Args:
+            path: Absolute request path.
+            fields: URL-encoded form fields without the CSRF token.
+
+        Returns:
+            Status, response headers, and decoded body.
+        """
+        encoded = urlencode({"_csrf": "test-token", **fields})
+        return self.request(
+            "POST",
+            path,
+            encoded,
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": self.app.origin,
+            },
+        )
+
+    def test_all_board_is_strict_read_only_with_provenance_and_order(self) -> None:
+        """Catch All mixing write controls, migrate copy, or unordered cards."""
+        with TodoStore(self.alpha).transaction() as transaction:
+            transaction.add(
+                title="alpha.one P2", priority="P2", task_type="chore", simple=True
+            )
+            completed = transaction.add(
+                title="alpha.one done", priority="P2", task_type="chore", simple=True
+            )
+            cancelled = transaction.add(
+                title="alpha.one cancelled",
+                priority="P2",
+                task_type="docs",
+                simple=True,
+            )
+            transaction.close(completed.task_id, "completed")
+            transaction.close(cancelled.task_id, "cancelled", "obsolete")
+        with TodoStore(self.beta).transaction() as transaction:
+            transaction.add(
+                title="beta P0", priority="P0", task_type="bug", simple=True
+            )
+            reviewing = transaction.add(
+                title="beta review", priority="P1", task_type="feature", simple=True
+            )
+            transaction.review(reviewing.task_id)
+
+        status, _, body = self.get("/?repo=all")
+        self.assertEqual(status, 200)
+        self.assertIn("All repositories is read-only", body)
+        self.assertNotIn("bot-todo migrate", body)
+        self.assertNotIn(">New task<", body)
+        self.assertNotIn('action="/tasks', body)
+        self.assertLess(body.index("beta P0"), body.index("alpha.one P2"))
+        self.assertIn("alpha.one", body)
+        self.assertIn("beta", body)
+        self.assertIn('id="task-', body)
+        targets = [
+            match
+            for match in re.findall(r'data-bs-target="(#[^"]+)"', body)
+            if match != "#add-task-modal"
+        ]
+        self.assertEqual(len(targets), 5)
+        self.assertEqual(len(set(targets)), 5)
+        for target in targets:
+            self.assertIn(f'id="{target[1:]}"', body)
+
+    def test_all_modal_ids_stay_distinct_when_repository_names_collide(self) -> None:
+        """Catch punctuation normalization collapsing All modal ids."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            dotted = root / "alpha.one"
+            dashed = root / "alpha-one"
+            TodoStore(dotted).initialize("Dotted")
+            TodoStore(dashed).initialize("Dashed")
+            with TodoStore(dotted).transaction() as transaction:
+                transaction.add(
+                    title="Dotted T001", priority="P2", task_type="chore", simple=True
+                )
+            with TodoStore(dashed).transaction() as transaction:
+                transaction.add(
+                    title="Dashed T001", priority="P2", task_type="chore", simple=True
+                )
+            app = KanbanWebApp(
+                None,
+                RepositoryCollection(
+                    (
+                        RepositoryEntry("alpha.one", dotted),
+                        RepositoryEntry("alpha-one", dashed),
+                    )
+                ),
+                csrf_token="test-token",
+            )
+            server = app.create_server(0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                connection = http.client.HTTPConnection("127.0.0.1", server.server_port)
+                connection.request("GET", "/?repo=all")
+                response = connection.getresponse()
+                status = response.status
+                body = response.read().decode()
+                connection.close()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
+
+        self.assertEqual(status, 200)
+        targets = re.findall(r'data-bs-target="(#task-[^"]+)"', body)
+        self.assertEqual(len(targets), 2)
+        self.assertEqual(len(set(targets)), 2)
+        for target in targets:
+            self.assertIn(f'id="{target[1:]}"', body)
+
+    def test_all_fails_without_partial_cards_when_one_repository_is_missing(
+        self,
+    ) -> None:
+        """Catch All rendering healthy cards after a strict collection failure."""
+        with TodoStore(self.alpha).transaction() as transaction:
+            transaction.add(
+                title="Healthy title", priority="P2", task_type="chore", simple=True
+            )
+        missing = self.alpha.parent / "gone"
+        app = KanbanWebApp(
+            None,
+            RepositoryCollection(
+                (
+                    RepositoryEntry("alpha.one", self.alpha),
+                    RepositoryEntry("gone", missing),
+                )
+            ),
+            csrf_token="test-token",
+        )
+        server = app.create_server(0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection("127.0.0.1", server.server_port)
+            connection.request("GET", "/?repo=all")
+            response = connection.getresponse()
+            status = response.status
+            body = response.read().decode()
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(status, 500)
+        self.assertIn("gone", body)
+        self.assertIn("repository_not_found", body)
+        self.assertIn("/?repo=alpha.one", body)
+        self.assertNotIn("Healthy title", body)
+
+    def test_empty_collection_all_board_has_four_empty_columns(self) -> None:
+        """Catch All requiring Current or hiding empty state columns."""
+        app = KanbanWebApp(None, RepositoryCollection(()), csrf_token="test-token")
+        server = app.create_server(0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection("127.0.0.1", server.server_port)
+            connection.request("GET", "/?repo=all")
+            response = connection.getresponse()
+            status = response.status
+            body = response.read().decode()
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+        self.assertEqual(status, 200)
+        for heading in ("Open", "Review", "Completed", "Cancelled"):
+            self.assertIn(f"> {heading}</h2>", body)
+        self.assertNotIn(">Current<", body)
+        self.assertIn("All repositories is read-only", body)

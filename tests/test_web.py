@@ -295,7 +295,7 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertIn(f'aria-labelledby="{title_id}"', modal)
         self.assertIn(f'id="{title_id}"', modal)
         self.assertIn(f"{task.task_id} — Inspect details", modal)
-        self.assertIn(f'action="/tasks/{task.task_id}/edit"', modal)
+        self.assertIn(f'action="/tasks/{task.task_id}/edit?repo=current"', modal)
         self.assertIn('name="title" value="Inspect details"', modal)
         self.assertIn('<option value="P1" selected>', modal)
         self.assertIn('<option value="feature" selected>', modal)
@@ -313,7 +313,7 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertIn('type="submit">Save</button>', modal)
         self.assertNotIn(">Close</button>", modal)
         self.assertNotIn(f'action="/tasks/{task.task_id}/transition"', modal)
-        self.assertIn(f'action="/tasks/{task.task_id}/transition"', body)
+        self.assertIn(f'action="/tasks/{task.task_id}/transition?repo=current"', body)
 
     def test_former_detail_route_returns_generic_not_found(self) -> None:
         """Catch a leftover GET /tasks/<id> page for a task that is on the board."""
@@ -372,7 +372,7 @@ class KanbanWebTests(TodoCliTestCase):
 
         task = self.store.snapshot().find("T001")
         self.assertEqual(status, 303)
-        self.assertEqual(headers["Location"], "/")
+        self.assertEqual(headers["Location"], "/?repo=current")
         self.assertEqual(task.title, "Created in browser")
         self.assertEqual(task.priority, "P1")
         self.assertEqual(task.task_type, "feature")
@@ -416,7 +416,7 @@ class KanbanWebTests(TodoCliTestCase):
                 )
                 task = self.store.snapshot().find(task_id)
                 self.assertEqual(status, 303)
-                self.assertEqual(headers["Location"], "/")
+                self.assertEqual(headers["Location"], "/?repo=current")
                 self.assertEqual(task.state, expected_state)
         self.assertEqual(
             self.store.snapshot().find(cancel_task.task_id).reason, "Superseded"
@@ -436,7 +436,7 @@ class KanbanWebTests(TodoCliTestCase):
         status, _, body = self.get("/")
 
         self.assertEqual(status, 200)
-        self.assertIn('<form method="post" action="/tasks">', body)
+        self.assertIn('<form method="post" action="/tasks?repo=current">', body)
         self.assertIn('<option value="P2" selected>P2</option>', body)
         for field in (
             "title",
@@ -450,8 +450,8 @@ class KanbanWebTests(TodoCliTestCase):
             "blocked_by",
         ):
             self.assertIn(f'name="{field}"', body)
-        self.assertIn(f'action="/tasks/{opened.task_id}/transition"', body)
-        self.assertIn(f'action="/tasks/{reviewing.task_id}/transition"', body)
+        self.assertIn(f'action="/tasks/{opened.task_id}/transition?repo=current"', body)
+        self.assertIn(f'action="/tasks/{reviewing.task_id}/transition?repo=current"', body)
         for action in ("review", "reopen", "complete", "cancel"):
             self.assertIn(f'value="{action}"', body)
 
@@ -951,7 +951,7 @@ class KanbanWebTests(TodoCliTestCase):
 
         _, _, body = self.get("/")
 
-        self.assertIn(f'action="/tasks/{task.task_id}/transition"', body)
+        self.assertIn(f'action="/tasks/{task.task_id}/transition?repo=current"', body)
         self.assertIn('class="btn btn-outline-secondary btn-sm"', body)
         self.assertIn('class="ti ti-arrow-right"', body)
         self.assertIn('class="ti ti-check"', body)
@@ -1105,7 +1105,7 @@ class KanbanWebTests(TodoCliTestCase):
 
         _, _, body = self.get("/")
         modal = self._task_modal(body, task.task_id)
-        self.assertIn(f'action="/tasks/{task.task_id}/edit"', modal)
+        self.assertIn(f'action="/tasks/{task.task_id}/edit?repo=current"', modal)
         self.assertIn('name="simple" checked', modal)
         self.assertIn('<details class="mt-3">', modal)
         self.assertNotIn('<details class="mt-3" open>', modal)
@@ -1146,7 +1146,7 @@ class KanbanWebTests(TodoCliTestCase):
 
         edited = self.store.snapshot().find(task.task_id)
         self.assertEqual(status, 303)
-        self.assertEqual(headers["Location"], "/")
+        self.assertEqual(headers["Location"], "/?repo=current")
         self.assertEqual(edited.title, "Edited in browser")
         self.assertEqual(edited.priority, "P1")
         self.assertEqual(edited.task_type, "feature")
@@ -1184,7 +1184,7 @@ class KanbanWebTests(TodoCliTestCase):
         )
 
         self.assertEqual(status, 303)
-        self.assertEqual(headers["Location"], "/")
+        self.assertEqual(headers["Location"], "/?repo=current")
         self.assertEqual(self.store.snapshot().find(task.task_id).title, "Unchanged")
 
     def test_edit_rejects_closed_tasks(self) -> None:
@@ -1568,3 +1568,90 @@ class CollectionKanbanWebTests(unittest.TestCase):
             self.assertIn(f"> {heading}</h2>", body)
         self.assertNotIn(">Current<", body)
         self.assertIn("All repositories is read-only", body)
+
+    def test_selected_repository_mutations_stay_on_that_repository(self) -> None:
+        """Catch add/edit/transition writing the launch repository or losing ?repo=."""
+        alpha_before = (self.alpha / "TODO.md").read_text(encoding="utf-8")
+
+        status, headers, _ = self.post(
+            "/tasks?repo=beta",
+            {
+                "title": "Beta only",
+                "priority": "P2",
+                "task_type": "chore",
+                "simple": "on",
+            },
+        )
+        self.assertEqual(status, 303)
+        self.assertEqual(headers["Location"], "/?repo=beta")
+        self.assertEqual(
+            (self.alpha / "TODO.md").read_text(encoding="utf-8"), alpha_before
+        )
+        beta_added = TodoStore(self.beta).snapshot().find("T001")
+        self.assertEqual(beta_added.title, "Beta only")
+
+        status, headers, _ = self.post(
+            "/tasks/T001/transition?repo=beta",
+            {"action": "review"},
+        )
+        self.assertEqual(status, 303)
+        self.assertEqual(headers["Location"], "/?repo=beta")
+        self.assertEqual(TodoStore(self.beta).snapshot().find("T001").state, "review")
+
+        status, headers, _ = self.post(
+            "/tasks/T001/edit?repo=beta",
+            {
+                "title": "Beta edited",
+                "priority": "P1",
+                "task_type": "feature",
+                "acceptance": "Edited on beta",
+                "tags": "",
+                "context": "",
+                "related": "",
+                "blocked_by": "",
+            },
+        )
+        self.assertEqual(status, 303)
+        self.assertEqual(headers["Location"], "/?repo=beta")
+        edited = TodoStore(self.beta).snapshot().find("T001")
+        self.assertEqual(edited.title, "Beta edited")
+        self.assertEqual(
+            (self.alpha / "TODO.md").read_text(encoding="utf-8"), alpha_before
+        )
+
+    def test_all_rejects_a_crafted_mutation_before_opening_a_transaction(self) -> None:
+        """Catch collection-wide writes through hidden controls or crafted requests."""
+        alpha_before = (self.alpha / "TODO.md").read_text(encoding="utf-8")
+        beta_before = (self.beta / "TODO.md").read_text(encoding="utf-8")
+
+        status, _, body = self.post(
+            "/tasks?repo=all",
+            {"title": "Wrong scope", "priority": "P2", "task_type": "chore", "simple": "on"},
+        )
+
+        self.assertEqual(status, 409)
+        self.assertIn("All repositories is read-only", body)
+        self.assertEqual((self.alpha / "TODO.md").read_text(encoding="utf-8"), alpha_before)
+        self.assertEqual((self.beta / "TODO.md").read_text(encoding="utf-8"), beta_before)
+
+    def test_all_post_without_csrf_is_forbidden_not_conflict(self) -> None:
+        """Catch All POST skipping Host/Origin/CSRF before the read-only guard."""
+        status, _, body = self.request(
+            "POST",
+            "/tasks?repo=all",
+            urlencode(
+                {
+                    "title": "Wrong scope",
+                    "priority": "P2",
+                    "task_type": "chore",
+                    "simple": "on",
+                }
+            ),
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": self.app.origin,
+            },
+        )
+
+        self.assertEqual(status, 403)
+        self.assertIn("Forbidden", body)

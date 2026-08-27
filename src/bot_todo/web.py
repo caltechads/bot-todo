@@ -373,7 +373,7 @@ class KanbanWebApp:
                     'data-bs-target="#add-task-modal"><i class="ti ti-plus" '
                     'aria-hidden="true"></i> New task</button>'
                 )
-                mutation_area = self._render_add_form()
+                mutation_area = self._render_add_form(selection)
             else:
                 header_action = ""
                 mutation_area = (
@@ -382,11 +382,15 @@ class KanbanWebApp:
                     "Run <code>bot-todo migrate</code> to enable board mutations.</p>"
                 )
         columns_html = "".join(
-            self._render_column(heading, tasks, writable=writable)
+            self._render_column(
+                heading, tasks, writable=writable, selection=selection
+            )
             for heading, tasks in columns
         )
         detail_modals = "".join(
-            self._render_task_detail_modal(row, writable=writable)
+            self._render_task_detail_modal(
+                row, writable=writable, selection=selection
+            )
             for _, tasks in columns
             for row in tasks
         )
@@ -451,20 +455,38 @@ class KanbanWebApp:
         )
         return self._page(title, content, selection=selection)
 
-    def add_task(self, fields: dict[str, str]) -> Task:
+    def _writable_store(self, selection: BoardSelection) -> TodoStore:
+        """Return the repository selected for a mutation.
+
+        Args:
+            selection: Request-local board selection.
+
+        Returns:
+            Selected Task Repository.
+
+        Raises:
+            TodoError: If All was selected.
+        """
+        if selection.store is None:
+            raise TodoError("All repositories is read-only", "conflict")
+        return selection.store
+
+    def add_task(self, selection: BoardSelection, fields: dict[str, str]) -> Task:
         """Add one task from browser form fields.
 
         Side Effects:
             Mutates the selected Task Repository.
 
         Args:
+            selection: Request-local board selection.
             fields: Parsed URL-encoded form fields.
 
         Returns:
             Newly allocated task.
 
         Raises:
-            TodoError: If form values violate the add contract.
+            TodoError: If All was selected or form values violate the add
+                contract.
         """
         priority = fields.get("priority", "")
         task_type = fields.get("task_type", "")
@@ -478,8 +500,8 @@ class KanbanWebApp:
             raise TodoError("choose acceptance or simple, not both", "usage")
         tags = [value.strip() for value in fields.get("tags", "").split(",")]
         blockers = [value.strip() for value in fields.get("blocked_by", "").split(",")]
-        assert self.store is not None
-        with self.store.transaction() as transaction:
+        store = self._writable_store(selection)
+        with store.transaction() as transaction:
             return transaction.add(
                 title=fields.get("title", ""),
                 priority=priority,
@@ -492,13 +514,16 @@ class KanbanWebApp:
                 blocked_by=[value for value in blockers if value],
             )
 
-    def edit_task(self, task_id: str, fields: dict[str, str]) -> Task:
+    def edit_task(
+        self, selection: BoardSelection, task_id: str, fields: dict[str, str]
+    ) -> Task:
         """Replace editable fields on one open or review task.
 
         Side Effects:
             Mutates the selected Task Repository.
 
         Args:
+            selection: Request-local board selection.
             task_id: Task receiving the edit.
             fields: Parsed URL-encoded form fields.
 
@@ -506,8 +531,8 @@ class KanbanWebApp:
             Updated task.
 
         Raises:
-            TodoError: If form values violate the edit contract or the task
-                is closed.
+            TodoError: If All was selected, form values violate the edit
+                contract, or the task is closed.
         """
         priority = fields.get("priority", "")
         task_type = fields.get("task_type", "")
@@ -531,14 +556,14 @@ class KanbanWebApp:
             for value in fields.get("blocked_by", "").split(",")
             if value.strip()
         ]
-        assert self.store is not None
-        current = self.store.snapshot().find(task_id)
+        store = self._writable_store(selection)
+        current = store.snapshot().find(task_id)
         current_tags = list(current.user_tags) if current is not None else []
         add_tags = [tag for tag in submitted if tag not in current_tags]
         remove_tags = [tag for tag in current_tags if tag not in submitted]
         context = fields.get("context") or None
         related = fields.get("related") or None
-        with self.store.transaction() as transaction:
+        with store.transaction() as transaction:
             return transaction.edit(
                 task_id,
                 title=fields.get("title", ""),
@@ -555,13 +580,16 @@ class KanbanWebApp:
                 clear_related=not related,
             )
 
-    def transition_task(self, task_id: str, fields: dict[str, str]) -> Task:
+    def transition_task(
+        self, selection: BoardSelection, task_id: str, fields: dict[str, str]
+    ) -> Task:
         """Apply one supported lifecycle action.
 
         Side Effects:
             Mutates the selected Task Repository.
 
         Args:
+            selection: Request-local board selection.
             task_id: Task receiving the transition.
             fields: Parsed form fields including the action.
 
@@ -569,11 +597,12 @@ class KanbanWebApp:
             Updated task.
 
         Raises:
-            TodoError: If the action is unsupported or invalid for the task.
+            TodoError: If All was selected or the action is unsupported or
+                invalid for the task.
         """
         action = fields.get("action")
-        assert self.store is not None
-        with self.store.transaction() as transaction:
+        store = self._writable_store(selection)
+        with store.transaction() as transaction:
             if action == "review":
                 return transaction.review(task_id)
             if action == "reopen":
@@ -584,7 +613,9 @@ class KanbanWebApp:
                 return transaction.close(task_id, "cancelled", fields.get("reason"))
             raise TodoError("unknown transition action", "usage")
 
-    def _render_card(self, row: BoardTask, *, writable: bool) -> str:
+    def _render_card(
+        self, row: BoardTask, *, writable: bool, selection: BoardSelection
+    ) -> str:
         """Render one task card.
 
         Args:
@@ -592,6 +623,7 @@ class KanbanWebApp:
 
         Keyword Args:
             writable: Whether lifecycle forms may be rendered.
+            selection: Request-local board selection for form actions.
 
         Returns:
             Escaped task card markup.
@@ -600,7 +632,9 @@ class KanbanWebApp:
         task_id = html.escape(task.task_id)
         title = html.escape(task.title)
         modal_id = html.escape(self._modal_id(row), quote=True)
-        actions = self._render_actions(task) if writable else ""
+        actions = (
+            self._render_actions(task, selection) if writable else ""
+        )
         provenance = ""
         if row.repository_name is not None:
             provenance = (
@@ -619,7 +653,12 @@ class KanbanWebApp:
         )
 
     def _render_column(
-        self, heading: str, tasks: list[BoardTask], *, writable: bool
+        self,
+        heading: str,
+        tasks: list[BoardTask],
+        *,
+        writable: bool,
+        selection: BoardSelection,
     ) -> str:
         """Render one responsive board column with bounded terminal cards.
 
@@ -629,6 +668,7 @@ class KanbanWebApp:
 
         Keyword Args:
             writable: Whether lifecycle forms may be rendered.
+            selection: Request-local board selection for form actions.
 
         Returns:
             Escaped board-column markup.
@@ -653,13 +693,17 @@ class KanbanWebApp:
             ),
         }[state]
         visible = tasks if state not in {"completed", "cancelled"} else tasks[:6]
-        cards = "".join(self._render_card(row, writable=writable) for row in visible)
+        cards = "".join(
+            self._render_card(row, writable=writable, selection=selection)
+            for row in visible
+        )
         overflow = tasks[6:] if state in {"completed", "cancelled"} else []
         if overflow:
             label = f"+ {len(overflow)} more {state} task{'s' if len(overflow) != 1 else ''}"
             cards += (
                 '<details class="terminal-overflow"><summary>'
-                f"{label}</summary>{''.join(self._render_card(row, writable=writable) for row in overflow)}"
+                f"{label}</summary>"
+                f"{''.join(self._render_card(row, writable=writable, selection=selection) for row in overflow)}"
                 "</details>"
             )
         if not cards:
@@ -676,7 +720,9 @@ class KanbanWebApp:
             f"{len(tasks)}</span></div>{cards}</section>"
         )
 
-    def _render_task_detail_modal(self, row: BoardTask, *, writable: bool) -> str:
+    def _render_task_detail_modal(
+        self, row: BoardTask, *, writable: bool, selection: BoardSelection
+    ) -> str:
         """Render one Tabler modal for a board-visible task.
 
         Args:
@@ -684,12 +730,13 @@ class KanbanWebApp:
 
         Keyword Args:
             writable: Whether open and review tasks may include an edit form.
+            selection: Request-local board selection for form actions.
 
         Returns:
             Escaped modal markup matching the New task dismiss contract.
         """
         if writable and row.task.state in {"open", "review"}:
-            return self._render_task_edit_modal(row)
+            return self._render_task_edit_modal(row, selection)
         return self._render_task_readonly_modal(row)
 
     def _modal_heading(self, row: BoardTask) -> str:
@@ -750,11 +797,14 @@ class KanbanWebApp:
             'data-bs-dismiss="modal">Close</button></div></div></div></div>'
         )
 
-    def _render_task_edit_modal(self, row: BoardTask) -> str:
+    def _render_task_edit_modal(
+        self, row: BoardTask, selection: BoardSelection
+    ) -> str:
         """Render a pre-filled edit form in the detail modal.
 
         Args:
             row: Open or review board row to edit.
+            selection: Request-local board selection for the form action.
 
         Returns:
             Escaped modal markup posting to ``/tasks/{id}/edit``.
@@ -785,7 +835,7 @@ class KanbanWebApp:
             f'<h2 class="modal-title" id="{title_id}">{heading}</h2>'
             '<button type="button" class="btn-close" data-bs-dismiss="modal" '
             'aria-label="Close"></button></div>'
-            f'<form method="post" action="/tasks/{task_id}/edit">'
+            f'<form method="post" action="/tasks/{task_id}/edit?{urlencode({"repo": selection.key})}">'
             f"{self._csrf_field()}"
             '<div class="modal-body">'
             f'<dl class="row">{self._definition_rows(metadata)}</dl>'
@@ -886,19 +936,23 @@ class KanbanWebApp:
             for task_type in sorted(TYPE_TAGS)
         )
 
-    def _render_add_form(self) -> str:
+    def _render_add_form(self, selection: BoardSelection) -> str:
         """Render the task creation form.
+
+        Args:
+            selection: Request-local board selection for the form action.
 
         Returns:
             Accessible form covering the repository add contract.
         """
+        action = f"/tasks?{urlencode({'repo': selection.key})}"
         return (
             '<div class="modal modal-blur fade" id="add-task-modal" tabindex="-1" '
             'aria-labelledby="add-task-modal-title" aria-hidden="true">'
             '<div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">'
             '<div class="modal-header"><h2 class="modal-title" id="add-task-modal-title">New task</h2>'
             '<button type="button" class="btn-close" data-bs-dismiss="modal" '
-            'aria-label="Close"></button></div><form method="post" action="/tasks">'
+            f'aria-label="Close"></button></div><form method="post" action="{html.escape(action, quote=True)}">'
             f"{self._csrf_field()}"
             '<div class="modal-body"><div class="mb-3"><label class="form-label">Title '
             '<input class="form-control" name="title" required></label></div>'
@@ -924,11 +978,12 @@ class KanbanWebApp:
             'type="submit">Add task</button></div></form></div></div></div>'
         )
 
-    def _render_actions(self, task: Task) -> str:
+    def _render_actions(self, task: Task, selection: BoardSelection) -> str:
         """Render legal lifecycle controls for one task.
 
         Args:
             task: Task whose current state selects available actions.
+            selection: Request-local board selection for form actions.
 
         Returns:
             Forms for legal transitions, empty for terminal tasks.
@@ -945,7 +1000,10 @@ class KanbanWebApp:
             )
         else:
             return ""
-        path = f"/tasks/{html.escape(task.task_id)}/transition"
+        path = (
+            f"/tasks/{html.escape(task.task_id)}/transition"
+            f"?{urlencode({'repo': selection.key})}"
+        )
         controls = "".join(
             f'<form method="post" action="{path}">{self._csrf_field()}'
             '<button class="btn btn-outline-secondary btn-sm" '
@@ -1203,9 +1261,13 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
                 403, self.app.render_error("Forbidden", "Invalid form token.")
             )
             return
+        selection = self.app.resolve_selection(urlsplit(self.path).query)
+        if selection is None:
+            self._send_html(404, self.app.render_not_found(self.app.default_selection))
+            return
         try:
             if path == "/tasks":
-                self.app.add_task(fields)
+                self.app.add_task(selection, fields)
             else:
                 parts = path.split("/")
                 if (
@@ -1213,24 +1275,26 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
                     or parts[1] != "tasks"
                     or parts[3] not in {"transition", "edit"}
                 ):
-                    self._send_html(404, self.app.render_not_found())
+                    self._send_html(404, self.app.render_not_found(selection))
                     return
                 task_id = unquote(parts[2])
                 if parts[3] == "edit":
-                    self.app.edit_task(task_id, fields)
+                    self.app.edit_task(selection, task_id, fields)
                 else:
-                    self.app.transition_task(task_id, fields)
+                    self.app.transition_task(selection, task_id, fields)
         except TodoError as error:
             if error.code == "invalid_document":
-                self._send_html(400, self.app.render_error("Bad request", str(error)))
+                self._send_html(
+                    400, self.app.render_error("Bad request", str(error), selection)
+                )
                 return
             if error.code == "unknown_task" and path.endswith("/edit"):
-                self._send_html(404, self.app.render_not_found())
+                self._send_html(404, self.app.render_not_found(selection))
                 return
-            self._send_todo_error(error)
+            self._send_todo_error(error, selection)
             return
         self.send_response(303)
-        self.send_header("Location", "/")
+        self.send_header("Location", self.app.selection_path(selection))
         self.send_header("Content-Length", "0")
         self.end_headers()
 

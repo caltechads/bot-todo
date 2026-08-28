@@ -58,10 +58,16 @@ pytest::
 	fi;
 
 napoleon-gate:
-	@python ~/bin/check_napoleon_gate.py --target src
+	@python ./bin/check_napoleon_gate.py --target src
 
 napoleon-gate-strict:
-	@python ~/bin/check_napoleon_gate.py --target src --strict
+	@python ./bin/check_napoleon_gate.py --target src --strict
 
 napoleon-gate-baseline:
-	@python ~/bin/check_napoleon_gate.py --target src --write-baseline
+	@python ./bin/check_napoleon_gate.py --target src --write-baseline
+
+ruff:
+	@uv run ruff check .
+
+mypy:
+	@uv run mypy .

@@ -49,9 +49,111 @@ strict = true
 module = "tests.*"
 disallow_untyped_defs = false
 
+###############################################################################
+# Ruff Configuration
+###############################################################################
 [tool.ruff]
+line-length = 88
+indent-width = 4
 target-version = "py311"
+# Tell ruff that this project's python code all lives inside the src subfolder.
+src = ["src"]
+# Don't lint the venv or tests. Tests still use unittest-style asserts (PT009)
+# and would add 1300+ findings under select ALL.
+exclude = [".venv", "tests/*", "*/tests/*"]
 
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+# Disable auto-formatting of code examples in docstrings.
+# This is currently disabled by default, but it is planned for this
+# to be opt-out in the future, so we're opting out now.
+docstring-code-format = false
+# Set the line length limit used when formatting code snippets in docstrings.
+# This only has an effect when the docstring-code-format = true.
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint]
+select = ["ALL"]
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+# Allow unused variables if their names are underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+ignore = [
+    #### Ignore entire modules
+    "ANN",  # flake8-annotations
+    "COM",  # flake8-commas
+    "C90",  # mccabe complexity
+    "TID",  # flake8-tidy-imports
+
+    #### Ignore specific rules
+    "CPY001",   # ignore missing copyright notices
+    "D100",     # ignore missing docs
+    "D101",     # ignore Missing docstring in public class
+    "D102",     # ignore Missing docstring in public method
+    "D103",     # ignore Missing docstring in public function
+    "D104",     # ignore Missing docstring in public package
+    "D105",     # ignore Missing docstring in magic method
+    "D106",     # ignore Missing docstring in public nested class
+    "D107",     # ignore Missing docstring in __init__ method
+    "D200",     # One-line docstring should fit on one line
+    "D203",     # 1 blank required before class docstring (numpy; conflicts with Google)
+    "D205",     # 1 blank line required between summary line and description
+    "D211",     # No blank lines allowed before class docstring
+    "D212",     # Summary on first line; this tree mixes D212 and D213 layouts
+    "D213",     # Summary on second line; do not flip the mixed existing docs
+    "D400",     # First line of docstring should end with a period
+    "D401",     # First line of docstring should be in imperative mood
+    "D415",     # First line of docstring should end with a period, question mark, or exclamation point
+    "DOC201",   # Ignore missing "Return" section in docstring
+    "E402",     # Ignore imports that aren't at the top of the file
+    "E501",     # Line length; ruff format owns wrapping
+    "EM101",    # Exception message string literals
+    "EM102",    # Exception message f-strings
+    "ERA001",   # Ignore commented out code
+    "FBT001",   # Boolean positional argument
+    "FIX002",   # Line contains "TODO", consider resolving the issue
+    "N818",     # Stop bugging me about not ending my exceptions with "Error"
+    "PLC0415",  # Ignore imports that aren't at the top level. Sometimes that's needed to avoid circular imports
+    "PLR0911",  # Too many return statements
+    "PLR0912",  # Too many branches
+    "PLR0913",  # Too many arguments
+    "PLR0915",  # Too many statements
+    "PLR2004",  # Magic value comparison
+    "PLR6201",  # Ignore list literals used in membership tests. We don't care about the performance boost from sets
+    "PTH",      # pathlib; this CLI uses os.path
+    "RUF012",   # Ignore mutable class attrs
+    "S603",     # ignore subprocess calls that do not check return code
+    "S607",     # ignore subprocess programs that are not absolute paths
+    "SIM102",   # Don't try to combine nested ifs
+    "SIM105",   # try/except/pass vs contextlib.suppress
+    "SLF001",   # Ignore access to attributes starting with a single _
+    "T201",     # Ignore print statements
+    "TC001",    # Typing-only import not under TYPE_CHECKING
+    "TD002",    # Missing author in TODO; try: # TODO(<author_name>): ... or # TODO @<author_name>:
+    "TD003",    # Missing issue link on the line following this TODO
+    "TRY003",   # external messages in exceptions are too verbose
+    "TRY301",   # raise within try
+]
+
+[tool.ruff.lint.pydocstyle]
+# Google/Napoleon sections; D212/D213 stay ignored because this tree mixes both.
+convention = "google"
+
+[tool.ruff.lint.pylint]
+max-args = 10
+max-positional-args = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG001", "S101", "PLR0913"]
+"**/test_*.py" = ["ARG001", "S101", "PLR0913"]
 
 ###############################################################################
 # bump-my-version Configuration

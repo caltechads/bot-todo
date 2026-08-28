@@ -1,24 +1,31 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 19 -->
+<!-- todo-format: 2; next-id: 20 -->
 
 ## P0 — Critical / Blocking
 
 ## P1 — High Priority
 
-- [ ] **T017** Fail more gracefully when the web command's port is in use #bug #web
-  - Acceptance: Done when bot-todo web on an occupied loopback port exits without a traceback or raw OSError, names the port that is already in use, explains that the Kanban Board could not bind that address, and tells the user how to retry with --port (including --port 0 to let the OS choose a free port). Tests cover the occupied-port path.
-  - Context: create_server binds ThreadingHTTPServer to 127.0.0.1; default --port is 8765. An occupied port currently surfaces as a generic OSError ('Address already in use') wrapped as io_error by the CLI, with no mention of the requested port or --port. Related: T010. ADR: docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md Plan: .scratch/kanban-web-frontend/t017-port-in-use-plan.md
-  - Related: T010
-  - Review: 2026-08-20
+- [ ] **T019** Make ruff ALL config pass without rewriting the codebase #chore
+  - Acceptance: make ruff exits 0. Config matches Napoleon/Google first-line summaries and this non-Django CLI. Remaining src violations are ignored or fixed.
+  - Context: Uncommitted pyproject.toml select=ALL copied from Django/Wagtail; 254 errors.
+  - Review: 2026-08-28
 
 ## P2 — Backlog
 
-- [ ] **T018** Web command repo switcher across global config repos #feature
+## Done (recent)
+
+- [x] **T018** Web command repo switcher across global config repos #feature
   - Acceptance: Web UI shows a repo menu listing 'All' plus each repo from the global config; selecting a repo shows only that repo's tasks; selecting 'All' shows the aggregated tasks of every configured repo, each labeled with its repository.
   - Context: Spec: .scratch/kanban-web-frontend/spec.md ADR: docs/adr/0011-keep-collection-kanban-selection-request-scoped-and-read-only.md Plan: .scratch/kanban-web-frontend/t018-repository-switcher-plan.md
-  - Review: 2026-08-26
+  - Outcome: completed
+  - Closed: 2026-08-26
 
-## Done (recent)
+- [x] **T017** Fail more gracefully when the web command's port is in use #bug #web
+  - Acceptance: Done when bot-todo web on an occupied loopback port exits without a traceback or raw OSError, names the port that is already in use, explains that the Kanban Board could not bind that address, and tells the user how to retry with --port (including --port 0 to let the OS choose a free port). Tests cover the occupied-port path.
+  - Context: create_server binds ThreadingHTTPServer to 127.0.0.1; default --port is 8765. An occupied port currently surfaces as a generic OSError ('Address already in use') wrapped as io_error by the CLI, with no mention of the requested port or --port. Related: T010. ADR: docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md Plan: .scratch/kanban-web-frontend/t017-port-in-use-plan.md
+  - Related: T010
+  - Outcome: completed
+  - Closed: 2026-08-26
 
 - [x] **T016** Allow edits in the Kanban task detail modal #feature
   - Acceptance: Done when the Kanban task detail modal can edit an open or review task through RepositoryTransaction.edit, covering title, priority, type, tags, acceptance or simple, context, related, and blockers; a successful save redirects to the board and the card reflects the new values; completed and cancelled tasks stay read-only; tests cover the in-modal edit form, a successful edit POST, and rejection of edits on closed tasks.

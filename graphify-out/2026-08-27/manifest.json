@@ -1,0 +1,247 @@
+{
+  ".claude/settings.local.json": {
+    "mtime": 1786572448.9446998,
+    "ast_hash": "c90a8a2af0c5a5cb3cf0b5aff2b6c618",
+    "semantic_hash": "c90a8a2af0c5a5cb3cf0b5aff2b6c618"
+  },
+  "etc/napoleon_gate_baseline.json": {
+    "mtime": 1786491529.9137177,
+    "ast_hash": "7e367bc8bad53a39da7ef11beb9195b1",
+    "semantic_hash": "7e367bc8bad53a39da7ef11beb9195b1"
+  },
+  "pyproject.toml": {
+    "mtime": 1786493237.0003097,
+    "ast_hash": "4c72b46d944f415b7553cfaa928f94c4",
+    "semantic_hash": "4c72b46d944f415b7553cfaa928f94c4"
+  },
+  "src/bot_todo/__init__.py": {
+    "mtime": 1786567368.683307,
+    "ast_hash": "46341c867acaec9f95c8f52ded90319b",
+    "semantic_hash": "46341c867acaec9f95c8f52ded90319b"
+  },
+  "src/bot_todo/cli.py": {
+    "mtime": 1786567583.075357,
+    "ast_hash": "4f7180d737da7dbb8c48ef0857e07327",
+    "semantic_hash": "4f7180d737da7dbb8c48ef0857e07327"
+  },
+  "src/bot_todo/config.py": {
+    "mtime": 1786561390.2364933,
+    "ast_hash": "e3cd071accf7ef676893a833c22f40f3",
+    "semantic_hash": "e3cd071accf7ef676893a833c22f40f3"
+  },
+  "src/bot_todo/repository.py": {
+    "mtime": 1786561390.2374115,
+    "ast_hash": "09c5687f95413407b34f90d37281e583",
+    "semantic_hash": "09c5687f95413407b34f90d37281e583"
+  },
+  "src/bot_todo/skill_installation.py": {
+    "mtime": 1786567600.7675853,
+    "ast_hash": "318325acda8135deb8285d3e818930fd",
+    "semantic_hash": "318325acda8135deb8285d3e818930fd"
+  },
+  "tests/__init__.py": {
+    "mtime": 1786493588.6656632,
+    "ast_hash": "503e5f51186bebf144a27cd2d744a97f",
+    "semantic_hash": "503e5f51186bebf144a27cd2d744a97f"
+  },
+  "tests/support.py": {
+    "mtime": 1786561520.16363,
+    "ast_hash": "b4f5d9d76b4b3d2a6dc7098a9370ba9f",
+    "semantic_hash": "b4f5d9d76b4b3d2a6dc7098a9370ba9f"
+  },
+  "tests/test_cli.py": {
+    "mtime": 1786564289.0602846,
+    "ast_hash": "8c211ddd57df6961d311514b5fa162d8",
+    "semantic_hash": "8c211ddd57df6961d311514b5fa162d8"
+  },
+  "tests/test_config.py": {
+    "mtime": 1786561675.5251515,
+    "ast_hash": "2195d7f93c9cb30c4f8a2b8e1a0c5738",
+    "semantic_hash": "2195d7f93c9cb30c4f8a2b8e1a0c5738"
+  },
+  "tests/test_distribution.py": {
+    "mtime": 1786567553.5374668,
+    "ast_hash": "4717b1ae29dbecb08ce793f0a98f5c00",
+    "semantic_hash": "4717b1ae29dbecb08ce793f0a98f5c00"
+  },
+  "tests/test_repository.py": {
+    "mtime": 1786561390.236622,
+    "ast_hash": "fb342ed6f3a90a82fe002d0614bf5145",
+    "semantic_hash": "fb342ed6f3a90a82fe002d0614bf5145"
+  },
+  "tests/test_skill_guidance.py": {
+    "mtime": 1786573927.0585282,
+    "ast_hash": "1a18990f2149c6568f53adf69c24d80f",
+    "semantic_hash": "1a18990f2149c6568f53adf69c24d80f"
+  },
+  "tests/test_skill_installation.py": {
+    "mtime": 1786567600.7676625,
+    "ast_hash": "fa45cab1fa502e5259362c8012872ece",
+    "semantic_hash": "fa45cab1fa502e5259362c8012872ece"
+  },
+  ".scratch/installable-bot-todo/issues/01-inventory-existing-cli-contract.md": {
+    "mtime": 1786229529.0146995,
+    "ast_hash": "a4750a17e361925ef0a573dd374a7d5c",
+    "semantic_hash": "a4750a17e361925ef0a573dd374a7d5c"
+  },
+  ".scratch/installable-bot-todo/issues/02-verify-uv-packaging-contracts.md": {
+    "mtime": 1786229576.6243432,
+    "ast_hash": "6f41fb0d3ec40f2aaa76e48386f3088f",
+    "semantic_hash": "6f41fb0d3ec40f2aaa76e48386f3088f"
+  },
+  ".scratch/installable-bot-todo/issues/03-verify-agent-skill-installation-contracts.md": {
+    "mtime": 1786229576.7554839,
+    "ast_hash": "a1218fe46a68e5ec964051697b9419ea",
+    "semantic_hash": "a1218fe46a68e5ec964051697b9419ea"
+  },
+  ".scratch/installable-bot-todo/issues/04-define-public-cli-contract.md": {
+    "mtime": 1786231241.871011,
+    "ast_hash": "72e7399728e95ef9285f569a999601d8",
+    "semantic_hash": "72e7399728e95ef9285f569a999601d8"
+  },
+  ".scratch/installable-bot-todo/issues/05-choose-package-and-repository-layout.md": {
+    "mtime": 1786231669.0235815,
+    "ast_hash": "0b78d07751400c903cbf2c7e59f88ff3",
+    "semantic_hash": "0b78d07751400c903cbf2c7e59f88ff3"
+  },
+  ".scratch/installable-bot-todo/issues/06-choose-cli-framework.md": {
+    "mtime": 1786232278.2133605,
+    "ast_hash": "b0a802b6577e57ef20d2565efcc7a0b9",
+    "semantic_hash": "b0a802b6577e57ef20d2565efcc7a0b9"
+  },
+  ".scratch/installable-bot-todo/issues/07-define-repository-configuration.md": {
+    "mtime": 1786233602.9962063,
+    "ast_hash": "7dbc9663d78da97bccea2b8b30bdd998",
+    "semantic_hash": "7dbc9663d78da97bccea2b8b30bdd998"
+  },
+  ".scratch/installable-bot-todo/issues/08-define-aggregate-query-semantics.md": {
+    "mtime": 1786239587.1437342,
+    "ast_hash": "255f0f7339a6532b19c368271e60c10e",
+    "semantic_hash": "255f0f7339a6532b19c368271e60c10e"
+  },
+  ".scratch/installable-bot-todo/issues/09-define-skill-asset-model.md": {
+    "mtime": 1786574262.6257827,
+    "ast_hash": "6b00e4793671dd4f4fb088cba78067be",
+    "semantic_hash": "6b00e4793671dd4f4fb088cba78067be"
+  },
+  ".scratch/installable-bot-todo/issues/10-define-safe-skill-installation.md": {
+    "mtime": 1786241240.1376257,
+    "ast_hash": "e2d0ee05eeeca6b523b0c2c65ac87e05",
+    "semantic_hash": "e2d0ee05eeeca6b523b0c2c65ac87e05"
+  },
+  ".scratch/installable-bot-todo/issues/11-define-compatibility-and-migration-policy.md": {
+    "mtime": 1786245782.5143323,
+    "ast_hash": "4781340b979dcde2a5051095990e3607",
+    "semantic_hash": "4781340b979dcde2a5051095990e3607"
+  },
+  ".scratch/installable-bot-todo/issues/12-define-concurrency-and-failure-policy.md": {
+    "mtime": 1786384230.991553,
+    "ast_hash": "8827985f041391f6a40b684eaa8e626e",
+    "semantic_hash": "8827985f041391f6a40b684eaa8e626e"
+  },
+  ".scratch/installable-bot-todo/issues/13-choose-runtime-and-platform-support.md": {
+    "mtime": 1786408920.2309167,
+    "ast_hash": "b4737a4d31f9e30812aac95fe7bf616e",
+    "semantic_hash": "b4737a4d31f9e30812aac95fe7bf616e"
+  },
+  ".scratch/installable-bot-todo/issues/14-choose-delivery-phases-and-gates.md": {
+    "mtime": 1786489780.4434092,
+    "ast_hash": "d9d730b0676a38b5960d5120ab1baa06",
+    "semantic_hash": "d9d730b0676a38b5960d5120ab1baa06"
+  },
+  ".scratch/installable-bot-todo/issues/15-validate-integrated-architecture-specification.md": {
+    "mtime": 1786490577.4726555,
+    "ast_hash": "5a69265c8ecab8ff8623f2ab7bc46415",
+    "semantic_hash": "5a69265c8ecab8ff8623f2ab7bc46415"
+  },
+  ".scratch/installable-bot-todo/issues/16-define-configuration-schema-evolution.md": {
+    "mtime": 1786487456.252777,
+    "ast_hash": "7a3e23996597a546504b59f4bb99075d",
+    "semantic_hash": "7a3e23996597a546504b59f4bb99075d"
+  },
+  ".scratch/installable-bot-todo/map.md": {
+    "mtime": 1786490577.5250413,
+    "ast_hash": "0b2ae9d4d48689f42b47beb87cb9673f",
+    "semantic_hash": "0b2ae9d4d48689f42b47beb87cb9673f"
+  },
+  ".scratch/installable-bot-todo/phase-1-plan.md": {
+    "mtime": 1786493980.4951837,
+    "ast_hash": "05ea7d4abdaaff7fde4b55d83d008304",
+    "semantic_hash": "05ea7d4abdaaff7fde4b55d83d008304"
+  },
+  ".scratch/installable-bot-todo/phase-2-plan.md": {
+    "mtime": 1786560975.3039553,
+    "ast_hash": "ae65a6ac8d7ce874a804f15f21dfd58d",
+    "semantic_hash": "ae65a6ac8d7ce874a804f15f21dfd58d"
+  },
+  ".scratch/installable-bot-todo/phase-3-plan.md": {
+    "mtime": 1786564374.1087022,
+    "ast_hash": "fbd4196bbc08209f56b6baa153d9e9b4",
+    "semantic_hash": "fbd4196bbc08209f56b6baa153d9e9b4"
+  },
+  ".scratch/installable-bot-todo/phase-4-plan.md": {
+    "mtime": 1786567180.4673927,
+    "ast_hash": "e49db388ad687a8ead664c3bd6485388",
+    "semantic_hash": "e49db388ad687a8ead664c3bd6485388"
+  },
+  ".scratch/installable-bot-todo/spec.md": {
+    "mtime": 1786490577.4177983,
+    "ast_hash": "6ab2ef577a228e4529d0674b2603b3a5",
+    "semantic_hash": "6ab2ef577a228e4529d0674b2603b3a5"
+  },
+  "AGENTS.md": {
+    "mtime": 1786574263.0254698,
+    "ast_hash": "0f524b4b5507da40eb424b18ac720709",
+    "semantic_hash": "0f524b4b5507da40eb424b18ac720709"
+  },
+  "CONTEXT.md": {
+    "mtime": 1786567621.0793056,
+    "ast_hash": "fda5947e530c43ad3eb2fb59e7710c8c",
+    "semantic_hash": "fda5947e530c43ad3eb2fb59e7710c8c"
+  },
+  "README.md": {
+    "mtime": 1786579324.4002423,
+    "ast_hash": "0b251aae822a7ffb5fc6d533f59e22e9",
+    "semantic_hash": "0b251aae822a7ffb5fc6d533f59e22e9"
+  },
+  "TODO.archive.md": {
+    "mtime": 1786229175.9057612,
+    "ast_hash": "b8a8a31bd8824e7a3409e4777cd3c30c",
+    "semantic_hash": "b8a8a31bd8824e7a3409e4777cd3c30c"
+  },
+  "TODO.md": {
+    "mtime": 1786567641.1000924,
+    "ast_hash": "1b3a2aec96bdadd391770de628457adc",
+    "semantic_hash": "1b3a2aec96bdadd391770de628457adc"
+  },
+  "docs/adr/0001-depend-on-portalocker-for-repository-locking.md": {
+    "mtime": 1786493795.2782366,
+    "ast_hash": "3200a307a3aa559074a55ef3d8247908",
+    "semantic_hash": "3200a307a3aa559074a55ef3d8247908"
+  },
+  "docs/adr/0002-decouple-the-archive-from-the-transaction.md": {
+    "mtime": 1786493808.7806785,
+    "ast_hash": "f4c612c3849a197c99b0a687c703f288",
+    "semantic_hash": "f4c612c3849a197c99b0a687c703f288"
+  },
+  "docs/agents/domain.md": {
+    "mtime": 1786229164.956226,
+    "ast_hash": "42bb5e6a21f726835e5c192a4420c198",
+    "semantic_hash": "42bb5e6a21f726835e5c192a4420c198"
+  },
+  "docs/agents/issue-tracker.md": {
+    "mtime": 1786229164.8253603,
+    "ast_hash": "89e81bdb0c0d1fb8e8bd891889ade328",
+    "semantic_hash": "89e81bdb0c0d1fb8e8bd891889ade328"
+  },
+  "src/bot_todo/skill_assets/todo/SKILL.md": {
+    "mtime": 1786574256.9723663,
+    "ast_hash": "5a97a810d35359a990e6d72bf76b4426",
+    "semantic_hash": "5a97a810d35359a990e6d72bf76b4426"
+  },
+  "src/bot_todo/skill_assets/todo/agents/openai.yaml": {
+    "mtime": 1786157310.6450438,
+    "ast_hash": "466e5adfe9985a2d867680285888fb7a",
+    "semantic_hash": "466e5adfe9985a2d867680285888fb7a"
+  }
+}

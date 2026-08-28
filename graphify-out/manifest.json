@@ -1,8 +1,8 @@
 {
   ".claude/settings.local.json": {
-    "mtime": 1786572448.9446998,
-    "ast_hash": "c90a8a2af0c5a5cb3cf0b5aff2b6c618",
-    "semantic_hash": "c90a8a2af0c5a5cb3cf0b5aff2b6c618"
+    "mtime": 1786666638.4582179,
+    "ast_hash": "8d476f51fe95702a4bc200d3c16bb634",
+    "semantic_hash": ""
   },
   "etc/napoleon_gate_baseline.json": {
     "mtime": 1786491529.9137177,
@@ -10,9 +10,9 @@
     "semantic_hash": "7e367bc8bad53a39da7ef11beb9195b1"
   },
   "pyproject.toml": {
-    "mtime": 1786493237.0003097,
-    "ast_hash": "4c72b46d944f415b7553cfaa928f94c4",
-    "semantic_hash": "4c72b46d944f415b7553cfaa928f94c4"
+    "mtime": 1787801167.982282,
+    "ast_hash": "4cfa5a9e192e5df91cc955bc88ded580",
+    "semantic_hash": ""
   },
   "src/bot_todo/__init__.py": {
     "mtime": 1786567368.683307,
@@ -20,19 +20,19 @@
     "semantic_hash": "46341c867acaec9f95c8f52ded90319b"
   },
   "src/bot_todo/cli.py": {
-    "mtime": 1786567583.075357,
-    "ast_hash": "4f7180d737da7dbb8c48ef0857e07327",
-    "semantic_hash": "4f7180d737da7dbb8c48ef0857e07327"
+    "mtime": 1787801132.3382773,
+    "ast_hash": "dd66a0c0eb02067fd360df7ac8ee1308",
+    "semantic_hash": ""
   },
   "src/bot_todo/config.py": {
-    "mtime": 1786561390.2364933,
-    "ast_hash": "e3cd071accf7ef676893a833c22f40f3",
-    "semantic_hash": "e3cd071accf7ef676893a833c22f40f3"
+    "mtime": 1786735667.2060773,
+    "ast_hash": "e54f5ac34170860f596c7d01631cc18f",
+    "semantic_hash": ""
   },
   "src/bot_todo/repository.py": {
-    "mtime": 1786561390.2374115,
-    "ast_hash": "09c5687f95413407b34f90d37281e583",
-    "semantic_hash": "09c5687f95413407b34f90d37281e583"
+    "mtime": 1787022611.337459,
+    "ast_hash": "1e8dcc15b3fd7ba8bac0a0cd77c0950f",
+    "semantic_hash": ""
   },
   "src/bot_todo/skill_installation.py": {
     "mtime": 1786567600.7675853,
@@ -45,14 +45,14 @@
     "semantic_hash": "503e5f51186bebf144a27cd2d744a97f"
   },
   "tests/support.py": {
-    "mtime": 1786561520.16363,
-    "ast_hash": "b4f5d9d76b4b3d2a6dc7098a9370ba9f",
-    "semantic_hash": "b4f5d9d76b4b3d2a6dc7098a9370ba9f"
+    "mtime": 1786647494.5609584,
+    "ast_hash": "f465959d13eeb61e917f3965c473bd96",
+    "semantic_hash": ""
   },
   "tests/test_cli.py": {
-    "mtime": 1786564289.0602846,
-    "ast_hash": "8c211ddd57df6961d311514b5fa162d8",
-    "semantic_hash": "8c211ddd57df6961d311514b5fa162d8"
+    "mtime": 1787801132.340441,
+    "ast_hash": "e224a7a8a3584aba30f4b1dc0b715c04",
+    "semantic_hash": ""
   },
   "tests/test_config.py": {
     "mtime": 1786561675.5251515,
@@ -60,19 +60,19 @@
     "semantic_hash": "2195d7f93c9cb30c4f8a2b8e1a0c5738"
   },
   "tests/test_distribution.py": {
-    "mtime": 1786567553.5374668,
-    "ast_hash": "4717b1ae29dbecb08ce793f0a98f5c00",
-    "semantic_hash": "4717b1ae29dbecb08ce793f0a98f5c00"
+    "mtime": 1787255701.4051485,
+    "ast_hash": "2fd92d97aa5db8f56fafae413985234d",
+    "semantic_hash": ""
   },
   "tests/test_repository.py": {
-    "mtime": 1786561390.236622,
-    "ast_hash": "fb342ed6f3a90a82fe002d0614bf5145",
-    "semantic_hash": "fb342ed6f3a90a82fe002d0614bf5145"
+    "mtime": 1787022611.3386571,
+    "ast_hash": "576356c2ceb06aebbf92925067e1fe67",
+    "semantic_hash": ""
   },
   "tests/test_skill_guidance.py": {
-    "mtime": 1786573927.0585282,
-    "ast_hash": "1a18990f2149c6568f53adf69c24d80f",
-    "semantic_hash": "1a18990f2149c6568f53adf69c24d80f"
+    "mtime": 1787022611.338914,
+    "ast_hash": "ff9a4de65d692c89eeda5637be08daed",
+    "semantic_hash": ""
   },
   "tests/test_skill_installation.py": {
     "mtime": 1786567600.7676625,
@@ -190,19 +190,19 @@
     "semantic_hash": "6ab2ef577a228e4529d0674b2603b3a5"
   },
   "AGENTS.md": {
-    "mtime": 1786574263.0254698,
-    "ast_hash": "0f524b4b5507da40eb424b18ac720709",
-    "semantic_hash": "0f524b4b5507da40eb424b18ac720709"
+    "mtime": 1787007565.0327306,
+    "ast_hash": "fbc632a43d2330a0ae0242994dd2ba43",
+    "semantic_hash": ""
   },
   "CONTEXT.md": {
-    "mtime": 1786567621.0793056,
-    "ast_hash": "fda5947e530c43ad3eb2fb59e7710c8c",
-    "semantic_hash": "fda5947e530c43ad3eb2fb59e7710c8c"
+    "mtime": 1787801132.3359096,
+    "ast_hash": "c2231c14c955e50a4fdc48b66c7444e1",
+    "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1786579324.4002423,
-    "ast_hash": "0b251aae822a7ffb5fc6d533f59e22e9",
-    "semantic_hash": "0b251aae822a7ffb5fc6d533f59e22e9"
+    "mtime": 1787801132.3364494,
+    "ast_hash": "829f67906ff37d5052c9fe4a4d100f1c",
+    "semantic_hash": ""
   },
   "TODO.archive.md": {
     "mtime": 1786229175.9057612,
@@ -210,9 +210,9 @@
     "semantic_hash": "b8a8a31bd8824e7a3409e4777cd3c30c"
   },
   "TODO.md": {
-    "mtime": 1786567641.1000924,
-    "ast_hash": "1b3a2aec96bdadd391770de628457adc",
-    "semantic_hash": "1b3a2aec96bdadd391770de628457adc"
+    "mtime": 1787801221.695894,
+    "ast_hash": "bfbb6cfefb756d0421b085cc964423a2",
+    "semantic_hash": ""
   },
   "docs/adr/0001-depend-on-portalocker-for-repository-locking.md": {
     "mtime": 1786493795.2782366,
@@ -235,13 +235,213 @@
     "semantic_hash": "89e81bdb0c0d1fb8e8bd891889ade328"
   },
   "src/bot_todo/skill_assets/todo/SKILL.md": {
-    "mtime": 1786574256.9723663,
-    "ast_hash": "5a97a810d35359a990e6d72bf76b4426",
-    "semantic_hash": "5a97a810d35359a990e6d72bf76b4426"
+    "mtime": 1787801132.3390038,
+    "ast_hash": "92b30b363c76bc01917aecf8923bcf59",
+    "semantic_hash": ""
   },
   "src/bot_todo/skill_assets/todo/agents/openai.yaml": {
     "mtime": 1786157310.6450438,
     "ast_hash": "466e5adfe9985a2d867680285888fb7a",
     "semantic_hash": "466e5adfe9985a2d867680285888fb7a"
+  },
+  "bin/release.sh": {
+    "mtime": 1787084617.173806,
+    "ast_hash": "4ccbaa4b5732aa63f1039a1e51b64de3",
+    "semantic_hash": ""
+  },
+  "src/bot_todo/task_management_snippet.py": {
+    "mtime": 1787007565.0354228,
+    "ast_hash": "7c8bc1c8f136aa9e113a1665acb33e82",
+    "semantic_hash": ""
+  },
+  "src/bot_todo/web.py": {
+    "mtime": 1787801132.3396606,
+    "ast_hash": "c5ec56aa0baf86bc0374a6c3337c6b38",
+    "semantic_hash": ""
+  },
+  "tests/test_collection_store.py": {
+    "mtime": 1786735667.206866,
+    "ast_hash": "34977b1a2a62ee74ca9b873a611a61c4",
+    "semantic_hash": ""
+  },
+  "tests/test_repos_cli.py": {
+    "mtime": 1786735667.207112,
+    "ast_hash": "50ef5af58e6e185405f258307098ec31",
+    "semantic_hash": ""
+  },
+  "tests/test_task_management_snippet.py": {
+    "mtime": 1787022611.3391712,
+    "ast_hash": "ab6daec72aca9b919bcbf9033cd3be63",
+    "semantic_hash": ""
+  },
+  "tests/test_web.py": {
+    "mtime": 1787801132.340986,
+    "ast_hash": "b9555442689b629c98027f07715cd55c",
+    "semantic_hash": ""
+  },
+  ".scratch/agents-md-snippet/plan.md": {
+    "mtime": 1787007565.0320697,
+    "ast_hash": "6e4baa096478270b9bb774dada845227",
+    "semantic_hash": ""
+  },
+  ".scratch/agents-md-snippet/spec.md": {
+    "mtime": 1787007565.0324228,
+    "ast_hash": "ff5f1e79fe30c684b7c11fd3acca262b",
+    "semantic_hash": ""
+  },
+  ".scratch/grouped-human-list/plan.md": {
+    "mtime": 1786751930.983888,
+    "ast_hash": "c09734c6f85d587575f0f78fa4b36237",
+    "semantic_hash": ""
+  },
+  ".scratch/init-default-name/plan.md": {
+    "mtime": 1786740538.9685054,
+    "ast_hash": "d0f09e6e5b9eae2ca3ed892deb0c9fcc",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/plan.md": {
+    "mtime": 1787255701.4012852,
+    "ast_hash": "bd937385b1a41cfe0679d38884e75e47",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/spec.md": {
+    "mtime": 1787801132.3347297,
+    "ast_hash": "704f815bfb335013b32848cbc6d57a3d",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/t015-detail-modal-plan.md": {
+    "mtime": 1787255701.4017668,
+    "ast_hash": "0c373f30128190e50aaa662905dda0bf",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/t016-edit-modal-plan.md": {
+    "mtime": 1787255701.4020033,
+    "ast_hash": "47834d889dedb94911910781333399aa",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/t017-port-in-use-plan.md": {
+    "mtime": 1787260462.2367253,
+    "ast_hash": "f95d69ea672561e6f4812ccd81a36bc0",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/t018-repository-switcher-plan.md": {
+    "mtime": 1787801132.335402,
+    "ast_hash": "29e80ff34a6d2fbe20c736fdd8e63584",
+    "semantic_hash": ""
+  },
+  ".scratch/repos-cli/plan.md": {
+    "mtime": 1786735667.2029583,
+    "ast_hash": "2d9b5df71eb8b25e4936201364a4746d",
+    "semantic_hash": ""
+  },
+  ".scratch/repos-cli/spec.md": {
+    "mtime": 1786735667.2034552,
+    "ast_hash": "98ea498e936fb94967be800ced56ce52",
+    "semantic_hash": ""
+  },
+  ".scratch/review-state/plan.md": {
+    "mtime": 1787022611.3354454,
+    "ast_hash": "18845f791f39659f26fef5eada83bb25",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1787007565.0327306,
+    "ast_hash": "fbc632a43d2330a0ae0242994dd2ba43",
+    "semantic_hash": ""
+  },
+  "LICENSE.txt": {
+    "mtime": 1787085056.83121,
+    "ast_hash": "ec1f9e44e26ee89ded3eb30c581941ad",
+    "semantic_hash": ""
+  },
+  "design-qa.md": {
+    "mtime": 1787255701.4031901,
+    "ast_hash": "9f41b656f4b2c653914c9d347761efe4",
+    "semantic_hash": ""
+  },
+  "docs/adr/0003-nest-repository-collection-commands.md": {
+    "mtime": 1786735667.2050357,
+    "ast_hash": "201d6666d3d95eeef3402939bbe31634",
+    "semantic_hash": ""
+  },
+  "docs/adr/0004-group-human-all-list-by-repository-name.md": {
+    "mtime": 1786751930.9855356,
+    "ast_hash": "5e021ce9de6e5ed4aa0c2cd2da67986c",
+    "semantic_hash": ""
+  },
+  "docs/adr/0005-emit-task-management-snippet-do-not-write-instruction-files.md": {
+    "mtime": 1787007565.0341713,
+    "ast_hash": "90b7cc82db243e778c221caa3bb0b2af",
+    "semantic_hash": ""
+  },
+  "docs/adr/0006-review-is-an-in-section-lifecycle-state.md": {
+    "mtime": 1787022611.3367445,
+    "ast_hash": "53958013c4d27a49e83a24ca8a4609b6",
+    "semantic_hash": ""
+  },
+  "docs/adr/0007-serve-the-local-kanban-with-the-python-standard-library.md": {
+    "mtime": 1787255701.4033816,
+    "ast_hash": "4d332c50b10247728beb111996b2f7b2",
+    "semantic_hash": ""
+  },
+  "docs/adr/0008-use-pinned-tabler-assets-for-the-kanban-presentation.md": {
+    "mtime": 1787255701.4035366,
+    "ast_hash": "553d93d210d30b5b03b2a743d2f757e5",
+    "semantic_hash": ""
+  },
+  "docs/adr/0009-kanban-task-detail-lives-in-a-board-modal.md": {
+    "mtime": 1787255701.4036973,
+    "ast_hash": "1a44b71289776610308fb75e8ad3b2c0",
+    "semantic_hash": ""
+  },
+  "docs/adr/0010-edit-open-and-review-tasks-in-the-kanban-detail-modal.md": {
+    "mtime": 1787255701.403856,
+    "ast_hash": "01e2f00ffa6ea97a82babaaface951f7",
+    "semantic_hash": ""
+  },
+  "docs/adr/0011-keep-collection-kanban-selection-request-scoped-and-read-only.md": {
+    "mtime": 1787801132.3376272,
+    "ast_hash": "3f59a33aa8135d6b650b8732de0b6a6e",
+    "semantic_hash": ""
+  },
+  "src/bot_todo/skill_assets/task_management.md": {
+    "mtime": 1787022611.3377569,
+    "ast_hash": "85b0f81bebc04d771492196c2c468e55",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/design-option-1.png": {
+    "mtime": 1787255701.3932817,
+    "ast_hash": "23b126795606d4a249d18aed19fda9a3",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/design-qa-column-comparison.png": {
+    "mtime": 1787255701.3939157,
+    "ast_hash": "b860b638bf08d200d0e2b063fbd97a6b",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/design-qa-comparison.png": {
+    "mtime": 1787255701.3980715,
+    "ast_hash": "fe00cd11305f523de0627b8f25cbdc2f",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/design-qa-header-comparison.png": {
+    "mtime": 1787255701.398465,
+    "ast_hash": "acedad3c5a5c9231deb56483cac7c121",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/implementation-1024x1024.png": {
+    "mtime": 1787255701.3992646,
+    "ast_hash": "bd81aabfe78aed80a85ef12911ca3b70",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/implementation-1440x1024.png": {
+    "mtime": 1787255701.4004176,
+    "ast_hash": "aeaec12ce0329f179460694b1c128899",
+    "semantic_hash": ""
+  },
+  ".scratch/kanban-web-frontend/implementation-390x844.png": {
+    "mtime": 1787255701.4010172,
+    "ast_hash": "bbb3d26deba88f5fbcdfc1f69277f7a5",
+    "semantic_hash": ""
   }
 }

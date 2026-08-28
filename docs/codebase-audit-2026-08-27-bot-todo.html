@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codebase Architecture &amp; Capability Audit &mdash; bot-todo</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#1c2029; --ink2:#4c5566; --ink3:#79839a;
+  --line:#e2e6ec; --accent:#2f5fd0; --hi:#b3261e; --med:#9a6400; --lo:#3d6b45;
+  --code:#f0f2f6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:38px 26px 90px}
+code,.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em}
+code{background:var(--code);padding:1px 5px;border-radius:4px}
+.loc{background:#e8edf8;color:#24417f;padding:1px 5px;border-radius:4px;white-space:nowrap}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-.35px}
+.sub{color:var(--ink2);margin:0 0 26px;font-size:15px}
+h2{font-size:21px;margin:0 0 4px;letter-spacing:-.2px}
+section{margin:44px 0 0}
+.shead{border-bottom:2px solid var(--ink);padding-bottom:9px;margin-bottom:20px;
+ display:flex;align-items:baseline;gap:12px}
+.shead .sn2{color:var(--ink3);font-size:12px;letter-spacing:1.4px;text-transform:uppercase;
+ font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:12px;
+ margin-bottom:30px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:14px 16px}
+.tl{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--ink3);
+ font-weight:700}
+.tv{font-size:17px;font-weight:650;margin:5px 0 3px;word-break:break-word}
+.tn{font-size:12.5px;color:var(--ink2)}
+.statrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px;
+ margin:22px 0 26px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:15px 16px;
+ border-top:3px solid var(--ink3)}
+.stat.ok{border-top-color:#3d6b45} .stat.warn{border-top-color:#9a6400}
+.stat.unv{border-top-color:#79839a;background:#fbfbfc}
+.sv{font-size:25px;font-weight:680;letter-spacing:-.5px;line-height:1.1}
+.stat.unv .sv{font-size:17px;color:var(--ink3);font-style:italic}
+.sl{font-size:12.5px;font-weight:620;margin-top:4px}
+.sn{font-size:11.5px;color:var(--ink3);margin-top:3px;line-height:1.45}
+p{margin:0 0 12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;
+ margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--ink3);
+ border-radius:9px;padding:19px 22px;margin-bottom:16px;scroll-margin-top:20px}
+.card:has(.p-high){border-left-color:var(--hi)}
+.card:has(.p-med){border-left-color:var(--med)}
+.card:has(.p-low){border-left-color:var(--lo)}
+.card-head{display:flex;gap:12px;align-items:baseline}
+.fid{font:650 12px ui-monospace,Menlo,monospace;color:var(--ink3);padding-top:3px}
+.card h3{font-size:17px;margin:0 0 11px;line-height:1.38;letter-spacing:-.15px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 15px}
+.badge{font-size:11px;font-weight:640;padding:3px 9px;border-radius:20px;
+ border:1px solid var(--line);background:#fafbfc;color:var(--ink2);white-space:nowrap}
+.p-high{background:#fdeceb;border-color:#f3c4c0;color:#8e1d17}
+.p-med{background:#fdf4e3;border-color:#eddcb4;color:#7a4f00}
+.p-low{background:#eef6f0;border-color:#c9e0d0;color:#2f5638}
+.c-high{background:#eaf0fc;border-color:#c2d2f2;color:#24417f}
+.c-med{background:#f2f0fa;border-color:#d5cfeb;color:#4a3d7a}
+.cat{background:#eff1f4;font-family:ui-monospace,Menlo,monospace;font-size:10.5px}
+.s-obs{background:#eaf3ec;border-color:#c3ddc9;color:#2c5636}
+.s-ver{background:#e9f0f8;border-color:#c3d5ea;color:#26456e}
+.s-inf{background:#f6f1e6;border-color:#e2d5b8;color:#6b5320}
+.eff{background:#fff;border-style:dashed}
+.sec{margin-top:13px}
+.sec h4{font-size:11px;text-transform:uppercase;letter-spacing:1.1px;color:var(--ink3);
+ margin:0 0 5px;font-weight:700}
+ul.ev{margin:0;padding-left:19px} ul.ev li{margin-bottom:4px}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--panel)}
+.tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:1px;
+ color:var(--ink3);border-bottom:2px solid var(--line);padding:9px 11px;font-weight:700}
+.tbl td{border-bottom:1px solid var(--line);padding:11px;vertical-align:top;line-height:1.55}
+.tbl tr.reject td:last-child{background:#fdf6f5}
+.tbl tr.adopt td:last-child{background:#f2f8f3}
+.nowrap{white-space:nowrap}
+.arch{width:100%;height:auto;background:var(--panel);border:1px solid var(--line);
+ border-radius:10px}
+.mod rect{fill:#f8f9fb;stroke:#c3cad6;stroke-width:1.4}
+.mod.warm rect{stroke:#c9a24a;stroke-width:2}
+.mod.hot rect{stroke:#c05248;stroke-width:2.2}
+.mn{font:640 13px -apple-system,Segoe UI,sans-serif;fill:#1c2029}
+.ms{font:11.5px ui-monospace,Menlo,monospace;fill:#5d6678}
+.lg{font:11.5px -apple-system,Segoe UI,sans-serif;fill:#79839a}
+.wave{margin-bottom:26px}
+.wave h3{font-size:15.5px;margin:0 0 9px;display:flex;align-items:center;gap:9px}
+.wn{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;
+ border-radius:50%;background:var(--ink);color:#fff;font-size:12px;font-weight:700}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(322px,1fr));gap:13px}
+.kcard{background:var(--panel);border:1px solid var(--line);border-left:4px solid #3d6b45;
+ border-radius:9px;padding:15px 17px}
+.kcard h4{margin:0 0 6px;font-size:14.5px}
+.kloc{margin-bottom:7px}
+.kcard p{margin:0;font-size:13.5px;color:var(--ink2)}
+.lim{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:15px 18px;
+ margin-bottom:11px}
+.lim h4{margin:0 0 5px;font-size:14px}
+.lim p{margin:0;font-size:13.5px;color:var(--ink2)}
+.unv-inline{background:#f0f1f4;border:1px dashed #b9c0cc;border-radius:4px;padding:0 5px;
+ font-size:.9em;font-style:italic;color:#5d6678}
+.legend{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+.keyfind{border-left:4px solid var(--accent);padding-left:15px;margin:16px 0}
+.keyfind li{margin-bottom:8px}
+footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);
+ color:var(--ink3);font-size:12px}
+a{color:var(--accent)}
+@media (prefers-color-scheme:dark){
+ :root{--bg:#14171c;--panel:#1b1f26;--ink:#e6e9ef;--ink2:#adb5c2;--ink3:#7f889a;
+  --line:#2b313b;--code:#232830;--accent:#7aa2f0}
+ .loc{background:#23304d;color:#a8c2f5}
+ .stat.unv{background:#191d23}
+ .badge{background:#20252d}
+ .p-high{background:#3a1d1b;border-color:#5e2f2b;color:#f0b3ad}
+ .p-med{background:#332714;border-color:#54401f;color:#e8c88a}
+ .p-low{background:#1b2b20;border-color:#2f4a37;color:#a8d4b4}
+ .c-high{background:#1c2740;border-color:#2f4370;color:#a9c3f2}
+ .c-med{background:#242038;border-color:#3d3560;color:#c2b6ec}
+ .cat{background:#242a33}
+ .s-obs{background:#1a2a1f;border-color:#2e4936;color:#a5d1b1}
+ .s-ver{background:#1a2534;border-color:#2c4056;color:#a6c4e6}
+ .s-inf{background:#2b2618;border-color:#4a4028;color:#dbc691}
+ .eff{background:#1b1f26}
+ .mod rect{fill:#232830;stroke:#3c4552}
+ .mn{fill:#e6e9ef} .ms{fill:#98a1b2} .lg{fill:#7f889a}
+ .tbl tr.reject td:last-child{background:#2a1e1d}
+ .tbl tr.adopt td:last-child{background:#1c2a20}
+ .unv-inline{background:#232830;border-color:#3c4552;color:#98a1b2}
+ .wn{background:#e6e9ef;color:#14171c}
+}
+</style></head><body><div class="wrap">
+
+<h1>Codebase Architecture &amp; Capability Audit</h1>
+<p class="sub"><strong>bot-todo</strong> &mdash; installable task-repository CLI for agent and human backlogs.
+Read-only evidence-first audit conducted 2026-08-27. No source, configuration or dependency of the
+audited project was modified.</p>
+
+<div class="tiles"><div class="tile"><div class="tl">Repository path</div><div class="tv">/Users/glenn/Programming/workspace/bot_todo</div><div class="tn">bot-todo 0.4.0 &middot; 42 commits &middot; 2026-08-12 &rarr; 2026-08-26</div></div><div class="tile"><div class="tl">Snapshot commit</div><div class="tv">60143bd</div><div class="tn">Bump version: 0.3.0 &rarr; 0.4.0 (master)</div></div><div class="tile"><div class="tl">Stack detected</div><div class="tv">Python &ge;3.11</div><div class="tn">Generic Python pack &middot; no Django/Qt/aiohttp signals</div></div><div class="tile"><div class="tl">Test result</div><div class="tv">287 passed / 93.2%</div><div class="tn">0 failed &middot; 0 skipped &middot; +69 subtests &middot; 38.99s</div></div></div>
+
+<section>
+<div class="shead"><span class="sn2">01</span><h2>Scope and evidence</h2></div>
+<div class="panel">
+<p>The audit covered the complete <code>src/bot_todo</code> package (7 modules, 6199 lines), the
+complete test suite (12 files, 5686 lines), all 11 architecture decision records, the packaging and
+build configuration, the repository's own agent instructions, and 42 commits of Git history spanning
+12&ndash;26 August 2026. Framework detection identified a single <code>pyproject.toml</code> at the
+repository root with no Django, Qt or aiohttp signals, selecting the generic Python stack pack.</p>
+
+<p><strong>Evidence sources available:</strong> Graphify (refreshed at audit start &mdash; see Coverage
+limits), local Git history, and the project's own <code>.venv</code> tooling
+(<code>pytest</code> 9.1.1, <code>mypy</code> 2.3.0, <code>ruff</code> 0.16.2). <strong>Unavailable:</strong>
+CodeGraph (no index), code-index (installed as a uv tool but no MCP server exposed in this session),
+<code>radon</code>, and <code>coverage.py</code>/<code>pytest-cov</code>. Each unavailability, the
+substitute method used, and its precise scope are stated in Coverage limits rather than glossed.</p>
+
+<p><strong>Delegated analysis.</strong> Five units exceeded what could be read fully in the audit's own
+working context without displacing the rest of the work, and each was analysed by a dedicated subagent
+that read its target in full and returned a compact structured record; the full analyses were written
+outside the audited repository. The delegated units were:
+<code>repository.py</code> (1775 lines), <code>cli.py</code> (1672), <code>web.py</code> (1415),
+<code>config.py</code> + <code>skill_installation.py</code> (1283 combined), and the entire quality and
+test-suite pass (12 test files, all tool runs, all three mandatory test-organization checks).
+Every delegated claim carried forward into this report was re-verified against the source or by direct
+execution. That verification changed four claims materially: a reported <code>claim</code> traceback is
+in fact a clean coded error (F-14); a reported configuration-corruption risk does not corrupt the file,
+because the validating re-parse precedes the write (F-03); <code>AggregateRunner</code>'s module
+placement is a decision recorded in ADR 0011 rather than a smell (F-21); and the v1&rarr;v2 format
+decision <em>is</em> recorded, in ADR 0006, so only one ADR sentence is stale (F-27). One subagent also
+reported and corrected its own invalid first mutation battery, documented in Coverage limits.</p>
+
+<p><strong>Repository integrity.</strong> The audit modified no source, test, documentation, packaging or
+configuration file &mdash; verified by <code>git status</code> over <code>src</code>, <code>tests</code>,
+<code>docs</code>, <code>pyproject.toml</code>, <code>Makefile</code>, <code>README.md</code>,
+<code>AGENTS.md</code>, <code>CONTEXT.md</code>, <code>etc</code> and <code>bin</code> after all five
+delegations completed. Two changes to the working tree are disclosed for completeness: files under
+<code>graphify-out/</code> were rewritten by the authorized graph refresh described in Coverage limits,
+and <code>TODO.md</code> carried an uncommitted modification that predates this session. Verification
+that required writing &mdash; scratch task repositories, mutation copies, the 400-task pipe test &mdash;
+was performed entirely outside the repository.</p>
+
+<p><strong>Evidence labels.</strong> Every claim in this report carries one of three classifications.
+<span class="badge s-obs">Observed locally</span> is supported directly by a file, a line, a test result
+or a command's output. <span class="badge s-ver">Verified externally</span> is supported by an
+authoritative external source. <span class="badge s-inf">Inference</span> is a judgment drawn from stated
+observations. Candidate decisions lacking external verification are marked
+<span class="unv-inline">unverified</span> and no adoption is recommended on their strength.</p>
+</div>
+</section>
+
+<section>
+<div class="shead"><span class="sn2">02</span><h2>Executive summary</h2></div>
+<div class="statrow"><div class="stat ok"><div class="sv">287</div><div class="sl">Tests passed</div><div class="sn">0 failed, 0 skipped, +69 subtests</div></div><div class="stat warn"><div class="sv">93.2%</div><div class="sl">Line coverage</div><div class="sn">2374/2548 &middot; error-path lines only 71.4%</div></div><div class="stat ok"><div class="sv">0</div><div class="sl">Ruff violations</div><div class="sn">project config runs E4/E7/E9/F only</div></div><div class="stat ok"><div class="sv">0</div><div class="sl">Mypy errors</div><div class="sn">19 files, <code>strict = true</code></div></div><div class="stat ok"><div class="sv">2.43</div><div class="sl">Avg cyclomatic complexity</div><div class="sn">223 functions &middot; max 26 &middot; ruff McCabe, not radon</div></div><div class="stat unv"><div class="sv">unverified</div><div class="sl">Worst MI-grade files</div><div class="sn">radon not found &mdash; no ruff/stdlib equivalent</div></div></div>
+<div class="panel">
+<p>This is a well-built codebase with an unusually disciplined documentation and decision record, and its
+problems are concentrated in three places rather than spread thin. The module-level architecture is
+genuinely sound: the import graph is a clean acyclic layering with <code>repository.py</code> as a leaf
+domain module, the dependency manifest is exactly conformant in both directions (<code>portalocker</code>
+is the only third-party import in <code>src</code> and it is declared), <code>mypy --strict</code> reports
+zero errors across 19 files, the mandated documentation contract passes with zero violations and an empty
+baseline, and the test suite is fully order-independent and hermetic across six different execution
+orders. A complete escaping audit of the web layer's ~30 interpolation sites found no XSS defect, and its
+security controls &mdash; constant-time CSRF comparison, exact Host and Origin checks, loopback-only
+binding, fail-closed origin handling &mdash; are correctly implemented.</p>
+
+<ul class="keyfind">
+<li><strong>The single highest-leverage fix is the quality gate itself (F-07).</strong> <code>[tool.ruff]</code>
+declares only <code>target-version</code>, so the green lint result reflects four default rule families;
+the complexity family is unconfigured, which is exactly why a McCabe-26 function went unflagged.
+<code>ruff</code> and <code>mypy</code> have no Makefile targets despite being mandated after every change,
+the napoleon gate invokes a script in the maintainer's home directory and so cannot run from a clean clone,
+and there is no CI of any kind. Until this is closed, every other fix in this report can silently regress.</li>
+<li><strong>93.2% line coverage conceals 71.4% error-path coverage (F-04).</strong> Of 112 raise sites,
+48 never execute; nine of those were confirmed by mutation, including five invariants of the document
+validator and a guard whose test is <em>named</em> for the behaviour it does not check. The cause is
+structural: 79.5% of tests reach the code through the CLI or a socket, and both front doors flatten
+distinct errors into one shape (F-10).</li>
+<li><strong>Three reproducible defects were confirmed by direct execution.</strong> A broken pipe on
+successful output escapes as a traceback because one line sits outside the error guard (F-01); a
+repository path containing a control character produces an uncaught <code>TOMLDecodeError</code> instead
+of a JSON error document (F-03); and no read command works at all on a read-only repository, because the
+shared read lock is opened for append (F-13).</li>
+<li><strong>One duplication is byte-identical and has already drifted (F-02).</strong>
+<code>config.py:693-724</code> and <code>repository.py:1658-1690</code> are character-for-character the
+same except that the config copy lost the directory <code>fsync</code> &mdash; so configuration writes
+are not crash-safe while task-file writes are.</li>
+<li><strong>The repository's own architecture policy is the most-violated rule in it (F-08).</strong>
+AGENTS.md mandates cohesive classes over masses of free functions; <code>repository.py</code> and
+<code>config.py</code> hold 40 module-level private functions between them, 34% of one file. Notably
+<code>web.py</code> and <code>skill_installation.py</code> already conform, so the policy is achievable
+here.</li>
+<li><strong>Two thirds of the test suite's wall time is one default argument (F-15).</strong> The suite
+takes 39s wall but only 3.6s of CPU; <code>serve_forever()</code> at tests/test_web.py:38 uses the stdlib
+0.5s poll interval, costing ~26.5s in teardown across 54 web tests. One keyword argument returns the
+suite to roughly 14s.</li>
+</ul>
+
+<p><strong>Build-vs-buy outcome.</strong> Six candidates were researched against concrete local targets.
+Only two are recommended, and both are standard library (<code>hashlib.file_digest</code>,
+<code>enum.StrEnum</code>) &mdash; no new third-party dependency is warranted anywhere in this codebase.
+Ten further candidates were evaluated and rejected without reaching a comparison row; all are enumerated
+under Kept deliberately rather than silently dropped.</p>
+</div>
+</section>
+
+<section>
+<div class="shead"><span class="sn2">03</span><h2>Architecture map</h2></div>
+<svg viewBox="0 0 640 420" role="img" aria-label="Module dependency diagram" class="arch"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8a94a6"/></marker></defs><line x1="190" y1="40" x2="490" y2="114" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="190" y1="114" x2="135" y2="170" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="190" y1="114" x2="370" y2="170" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="190" y1="114" x2="555" y2="170" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="190" y1="114" x2="330" y2="300" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="490" y1="114" x2="135" y2="170" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="490" y1="114" x2="330" y2="300" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="135" y1="244" x2="330" y2="300" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><line x1="370" y1="244" x2="330" y2="300" stroke="#8a94a6" stroke-width="1.3" marker-end="url(#ar)" opacity="0.75"/><g class="mod warm"><rect x="40" y="40" width="300" height="74" rx="7"/><text x="51" y="61" class="mn">cli.py</text><text x="51" y="79" class="ms">1672 lines &middot; 10 cls &middot; 6 fns</text><text x="51" y="97" class="ms">McCabe max 13 &middot; mean 1.75</text></g><g class="mod hot"><rect x="380" y="40" width="220" height="74" rx="7"/><text x="391" y="61" class="mn">web.py</text><text x="391" y="79" class="ms">1415 lines &middot; 4 cls &middot; 1 fns</text><text x="391" y="97" class="ms">McCabe max 17 &middot; mean 3.02</text></g><g class="mod cool"><rect x="40" y="170" width="190" height="74" rx="7"/><text x="51" y="191" class="mn">config.py</text><text x="51" y="209" class="ms">746 lines &middot; 3 cls &middot; 16 fns</text><text x="51" y="227" class="ms">McCabe max 8 &middot; mean 2.55</text></g><g class="mod cool"><rect x="260" y="170" width="220" height="74" rx="7"/><text x="271" y="191" class="mn">skill_installation.py</text><text x="271" y="209" class="ms">537 lines &middot; 3 cls &middot; 1 fns</text><text x="271" y="227" class="ms">McCabe max 7 &middot; mean 2.94</text></g><g class="mod cool"><rect x="510" y="170" width="90" height="74" rx="7"/><text x="521" y="191" class="mn">task_management_snippet.py</text><text x="521" y="209" class="ms">35 lines &middot; 1 cls &middot; 0 fns</text><text x="521" y="227" class="ms">McCabe max 1 &middot; mean 1.0</text></g><g class="mod hot"><rect x="180" y="300" width="300" height="74" rx="7"/><text x="191" y="321" class="mn">repository.py</text><text x="191" y="339" class="ms">1775 lines &middot; 9 cls &middot; 24 fns</text><text x="191" y="357" class="ms">McCabe max 26 &middot; mean 2.59</text></g><text x="40" y="398" class="lg">Arrows: imports. Red border: a function at McCabe &ge;17. repository.py imports nothing internal (leaf domain); the graph is acyclic.</text></svg>
+<div class="panel" style="margin-top:16px">
+<p><strong>Layering is sound; the problems are inside modules and across duplicated code, not in the
+dependency structure.</strong> <code>repository.py</code> imports nothing from its own package and is the
+leaf domain; <code>config.py</code> and <code>skill_installation.py</code> depend only on it;
+<code>web.py</code> adds <code>config.py</code>; <code>cli.py</code> sits on top of everything. There are
+no cycles, and mypy strict resolves cleanly &mdash; a real strength worth preserving through the
+extractions recommended below.</p>
+<p>Graphify's refreshed graph (1434 nodes, 2761 edges, 83 communities) ranks the <code>cli.py</code>
+community lowest in cohesion at 0.06 and the <code>repository.py</code> community next at 0.05. Direct
+reading confirms the cause in both cases: in <code>cli.py</code>, six layers &mdash; parser policy,
+selector resolution, command orchestration, aggregation, presentation and process contract &mdash; share
+nothing but the <code>TodoError</code> type; in <code>repository.py</code>, a third of the file is a
+free-function block outside any class.</p>
+<h4 style="font-size:12px;text-transform:uppercase;letter-spacing:1.1px;color:var(--ink3);margin:18px 0 8px">
+Hot spots analysed by dedicated delegation</h4>
+<table class="tbl"><thead><tr><th>Unit</th><th>Location</th><th>Size</th>
+<th>Concerns concentrated</th></tr></thead><tbody><tr><td><strong>KanbanWebApp</strong></td><td><code class="loc">web.py:81-1140</code></td><td class="nowrap">1060 lines</td><td>7 concerns: launch selection, query resolution, socket bind, collection I/O, mutation orchestration, form validation, 646 lines of HTML</td></tr><tr><td><strong>CommandRunner</strong></td><td><code class="loc">cli.py:457-910</code></td><td class="nowrap">454 lines</td><td>16-way dispatch + 16 handlers + presentation literals + one stranded business rule</td></tr><tr><td><strong>SkillInstaller</strong></td><td><code class="loc">skill_installation.py:119-537</code></td><td class="nowrap">418 lines</td><td>5 separable jobs: asset ownership, tree hashing, manifest schema, action classification, transactional commit</td></tr><tr><td><strong>RepositoryTransaction</strong></td><td><code class="loc">repository.py:622-1006</code></td><td class="nowrap">385 lines</td><td>14 responsibilities incl. format gating, ID allocation, CRUD, lifecycle, clock, git/subprocess, retention, durable publication</td></tr><tr><td><strong>Free-function mass</strong></td><td><code class="loc">repository.py 24 fns / config.py 16 fns</code></td><td class="nowrap">~1000 lines</td><td>40 module-level private functions outside any class in a repository whose AGENTS.md mandates cohesive classes</td></tr></tbody></table>
+<p style="margin-top:14px"><strong>Complexity concentration.</strong> Per-file mean McCabe:
+<code>web.py</code> 3.02, <code>skill_installation.py</code> 2.94, <code>repository.py</code> 2.59,
+<code>config.py</code> 2.55, <code>cli.py</code> 1.75. The largest module has the <em>lowest</em> mean
+complexity &mdash; it is long because it holds many small handlers, which is the benign kind of long. The
+seven functions above McCabe 8 are <code>_validate_document</code> (26), <code>do_POST</code> (17),
+<code>edit</code> (17), <code>_collection_columns</code> (14), <code>main</code> (13),
+<code>_parse_document</code> (10) and <code>resolve_selection</code> (9).</p>
+</div>
+</section>
+
+<section>
+<div class="shead"><span class="sn2">04</span><h2>Findings</h2></div>
+<p class="sub" style="margin-bottom:18px">27 corroborated findings, ranked by impact then confidence.
+Estimated effort is shown as a separate field and deliberately does not influence the ranking.</p>
+
+<article class="card" id="F-01">
+  <div class="card-head">
+    <span class="fid">F-01</span>
+    <h3>Successful output is written outside the error guard, so a broken pipe escapes as a traceback</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-high">Priority: High</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: XS (1-line move)</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">cli.py:1671</code> &mdash; <code>writer.success(...)</code> sits after the <code>try</code> block that ends at line 1670</li><li><code class="loc">cli.py:1364</code> &mdash; <code>print(json.dumps(document, ensure_ascii=False))</code> &mdash; the raising call</li><li><code class="loc">cli.py:1665-1670</code> &mdash; <code>TodoError</code> and <code>OSError</code> are both handled, but only for the pre-output phase</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Reproduced during this audit against a 400-task repository (202 354 bytes of JSON). <code>bot-todo --json list | head -c 1</code> exits 1 with <code>BrokenPipeError: [Errno 32] Broken pipe</code> on stderr and no JSON envelope on stdout. Any agent that pipes a large query into a short-lived reader &mdash; <code>head</code>, <code>jq -e</code> with early exit, a closed subprocess pipe &mdash; receives a Python traceback instead of the documented machine-readable error document. The failure only appears once output exceeds the 64 KiB pipe buffer, so it is invisible in small repositories and appears as collections grow.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Move the <code>writer.success(...)</code> call inside the existing guarded region so the established <code>OSError &rarr; io_error</code> path at cli.py:1668-1670 covers output as well as computation.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Move line 1671 above the <code>except</code> clauses, returning the exit code from inside the <code>try</code>. 2. Add a regression test that writes more than 64 KiB to a closed pipe and asserts a clean non-zero exit with no traceback. 3. Consider the same treatment for <code>writer.failure</code> at cli.py:1628.</p></div>
+</article>
+<article class="card" id="F-02">
+  <div class="card-head">
+    <span class="fid">F-02</span>
+    <h3>Byte-identical durability helper duplicated across two modules, and the copy dropped the directory fsync</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-high">Priority: High</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness / duplication</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">config.py:693-724</code> &mdash; <code>_replace_text</code> &mdash; atomic replace, file fsync, permission preservation</li><li><code class="loc">repository.py:1658-1690</code> &mdash; <code>_write_document</code> &mdash; character-for-character identical including the docstring</li><li><code class="loc">repository.py:1690</code> &mdash; the one differing line: <code>_fsync_directory(path.parent)</code>, absent from the config copy</li><li><code class="loc">config.py</code> &mdash; <code>grep fsync</code> returns only line 718 (the file descriptor) &mdash; config.py never syncs a directory</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Verified by diffing both bodies: they are identical apart from the function name and that single trailing call (md5 of the two extracted bodies differ only on those two lines). The task-file writer deliberately flushes the parent directory entry so a rename survives a crash; the configuration writer does not. A power loss or kernel panic immediately after <code>bot-todo repos add</code> can therefore lose the configuration rename while an identical crash preserves the TODO.md rename &mdash; asymmetric durability produced purely by copy-paste drift, in a project that has an ADR about durable writes. There is also no durability test for <code>config.toml</code>: <code>tests/test_repository.py:65-108</code> <code>DurabilityTests</code> covers the task file only.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Delete one copy. <code>config.py:14</code> already imports three names from <code>bot_todo.repository</code>, so the lazy fix is to import the existing writer rather than introduce a new module.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Delete <code>config.py:693-724</code>. 2. Import and call <code>repository._write_document</code> (or promote it to a small shared <code>DurableTextFile</code> collaborator if the private-name coupling is unwanted). 3. Extend <code>DurabilityTests</code> to cover <code>config.toml</code> so the two writers cannot diverge again.</p></div>
+</article>
+<article class="card" id="F-03">
+  <div class="card-head">
+    <span class="fid">F-03</span>
+    <h3>Hand-rolled TOML escaping under-escapes control characters, breaking the <code>--json</code> contract with an uncaught traceback</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-high">Priority: High</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness / contract</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">config.py:651-668</code> &mdash; <code>_toml_string</code> escapes only <code>\</code>, <code>&quot;</code>, <code>\n</code>, <code>\t</code></li><li><code class="loc">config.py:483</code> &mdash; <code>_document_entries(self.path, tomllib.loads(text))</code> &mdash; not wrapped, unlike config.py:201-204</li><li><code class="loc">config.py:301-302, 488-527</code> &mdash; repository <em>paths</em> carry no character validation, unlike names (<code>NAME_RE</code>, config.py:32)</li><li><code class="loc">cli.py:1665, 1668</code> &mdash; <code>main</code> catches only <code>TodoError</code> and <code>OSError</code></li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Reproduced end to end during this audit. <code>tomllib</code> rejects raw <code>\r</code>, <code>\x0c</code> and other C0 control characters in a basic string, which was confirmed directly against the exact <code>_toml_string</code> implementation. Adding a repository whose POSIX path contains a carriage return (<code>bot-todo repos add "$PWD/ba"$'\r'"d"</code>) produces an uncaught <code>tomllib.TOMLDecodeError: Illegal character '\r'</code> traceback and no JSON error document, defeating the machine contract that every agent consuming this CLI depends on. The existing configuration file is <em>not</em> corrupted &mdash; the validating re-parse at line 483 runs before the write at 484, so the prior good file survives and remains readable. The severity is contract violation and unhandled-exception surface, not data loss.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Escape the full set of TOML-illegal control characters and wrap the validating re-parse so any residual decode failure surfaces as a coded <code>TodoError</code>. Adopting a TOML-writer dependency is not warranted &mdash; see the build-vs-buy matrix.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Extend <code>_toml_string</code> to emit <code>\u00XX</code> escapes for all C0 controls plus <code>\r</code> and <code>\x7f</code>. 2. Wrap config.py:483 in <code>try/except tomllib.TOMLDecodeError</code> raising <code>TodoError(..., "invalid_config")</code>. 3. Add a parametrized test over the control-character class &mdash; the existing <code>test_quotes_in_paths_are_escaped</code> (tests/test_collection_store.py:213) covers exactly one character and its generalizing name invites the wrong conclusion.</p></div>
+</article>
+<article class="card" id="F-04">
+  <div class="card-head">
+    <span class="fid">F-04</span>
+    <h3>93.2% line coverage conceals 71.4% error-path coverage: 43% of raise sites never execute</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-high">Priority: High</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">test-coverage</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: L</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">src/bot_todo/*.py</code> &mdash; 112 <code>raise</code> sites and 33 <code>except</code> handlers; 48 raises (43%) and 10 handlers (30%) never execute under the suite</li><li><code class="loc">repository.py:1336-1345, 1350-1351</code> &mdash; invalid/duplicate task ID, one-type-tag, repeated-tag, acceptance-or-simple &mdash; all mutation-confirmed dead to the suite</li><li><code class="loc">repository.py:1354-1366</code> &mdash; the entire closed-task branch of the validator, 5 invariants, never exercised</li><li><code class="loc">repository.py:849, 875, 1599</code> &mdash; double-claim, release-unclaimed, transition-on-closed &mdash; message strings appear nowhere in <code>tests/</code></li><li><code class="loc">repository.py:1428-1429</code> &mdash; malformed-<code>Claimed</code> guard is unreachable behind <code>_require_text</code> (1347), yet tests/test_cli.py:310 is <em>named</em> <code>test_validate_rejects_blank_field_and_malformed_claim</code></li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>38% of all uncovered lines sit on error paths that make up only 9% of the code. Gaps were confirmed by targeted mutation against a scratch copy of the tree: gutting each guard left the suite at 285-287 passing. The concrete risk is that the validator &mdash; the component that decides whether a repository's canonical file is trustworthy &mdash; can regress silently in five of its invariants, and that a test name asserts a guarantee the test body does not check. The root cause is structural, not negligence: 79.5% of tests reach the code through the CLI or a socket, and both front doors flatten distinct errors into one shape (config.py has 10 raises all coded <code>invalid_config</code>, and 11 tests assert only that code; web.py has 8 <code>usage</code> raises all rendering as <code>400 Bad request</code>).</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Add a direct unit tier for the two pure validators (<code>_validate_document</code>, <code>_validate_claim</code>) and assert on error identity rather than error class. Parametrizing the existing collapsible clusters (F-23) is the cheapest vehicle, because it converts <code>assertEqual(code, 'invalid_config')</code> into <code>(input, expected_message)</code> pairs in the same edit.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add <code>tests/test_document_validation.py</code> calling <code>_validate_document</code> on hand-built hostile documents, one parametrize entry per raise site. 2. Change the 11 code-only assertions in tests/test_config.py to assert messages. 3. Delete the unreachable guard at repository.py:1428-1429 and rename tests/test_cli.py:310 to match what it verifies. 4. Track the error-path figure (71.4%) rather than the line figure as the gate.</p></div>
+</article>
+<article class="card" id="F-05">
+  <div class="card-head">
+    <span class="fid">F-05</span>
+    <h3>The Kanban edit path's field validation is entirely untested while the identical add path is covered</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-high">Priority: High</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">test-coverage</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">web.py:539-542</code> &mdash; <code>edit_task</code> unknown priority / unknown task type &mdash; mutation-confirmed never executed</li><li><code class="loc">web.py:493-496</code> &mdash; the character-equivalent checks in <code>add_task</code> &mdash; these <em>are</em> tested</li><li><code class="loc">web.py:545-553</code> &mdash; the adjacent acceptance/simple and reserved-tag rules on the edit path, also untested</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Gutting the edit-path guards left the suite at 285 passed. Because the add path is symmetric and covered, a reader auditing web.py sees a validated edit path that is not actually verified; a refactor that drops or inverts these checks ships green. The consequence is that a crafted board POST could write an out-of-range priority or an unrecognized type tag into <code>TODO.md</code>, which the repository layer does not independently reject &mdash; <code>repository.py:793-795</code> indexes <code>document.active[priority]</code> directly and would surface a raw <code>KeyError</code> rather than a coded <code>TodoError</code>.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Mirror the existing add-path tests onto the edit path, and push the priority/type membership rule down into <code>RepositoryTransaction</code> so it is enforced once rather than in three adapters.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Copy the add-path validation tests in tests/test_web.py, retargeting <code>/tasks/&lt;id&gt;/edit</code>. 2. Add a domain guard in <code>repository.py</code> converting an unknown priority into <code>TodoError(..., "usage")</code>. 3. Consider <code>Literal["P0","P1","P2"]</code> on the transaction signature so mypy catches the class statically.</p></div>
+</article>
+<article class="card" id="F-06">
+  <div class="card-head">
+    <span class="fid">F-06</span>
+    <h3><code>_validate_document</code> is simultaneously the most complex function and the largest untested branch cluster</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-high">Priority: High</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">architecture / test-coverage</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: M</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">repository.py:1321</code> &mdash; McCabe 26 &mdash; 2.6&times; the next-highest function in its own file, verified via <code>ruff --select C901</code></li><li><code class="loc">repository.py:1333-1389</code> &mdash; roughly 18 raise sites, of which about 15 never execute under the suite</li><li><code class="loc">pyproject.toml:52-53</code> &mdash; <code>[tool.ruff]</code> sets only <code>target-version</code>, so C901 never runs in the project's own gate</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>This function's complexity <em>is</em> its branch count, and about 60% of those branches are invisible to the test suite. It is the single highest-risk unit in the repository: the widest decision surface, the least verification, and no lint rule configured that would have flagged it. Independent confirmation during this audit: enabling <code>--select C901</code> with a threshold of 8 reports exactly 7 functions, headed by this one at 26.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Extract a <code>DocumentValidator</code> class holding one invariant per method, which both lowers the per-function branch count and creates the seam that makes each invariant unit-testable. This is the clearest instance of the free-function-mass problem in F-09 and should be the first extraction attempted.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Introduce <code>DocumentValidator</code> with the document injected in the constructor; convert each raise group into a small named method. 2. Add one test per method (this closes most of F-04 as a side effect). 3. Enable <code>lint.select</code> with the complexity family so the ceiling is enforced afterwards (F-12).</p></div>
+</article>
+<article class="card" id="F-07">
+  <div class="card-head">
+    <span class="fid">F-07</span>
+    <h3>The project's own mandated quality gate is under-configured, partly unenforceable, and has no CI</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-high">Priority: High</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">process / policy conformance</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">pyproject.toml:52-53</code> &mdash; <code>[tool.ruff]</code> declares only <code>target-version</code> &mdash; no <code>lint.select</code>, so only default E4/E7/E9/F rules run</li><li><code class="loc">Makefile</code> &mdash; no <code>ruff</code> target and no <code>mypy</code> target, though AGENTS.md requires both after every change</li><li><code class="loc">Makefile:61</code> &mdash; <code>make napoleon-gate</code> runs <code>python ~/bin/check_napoleon_gate.py</code> &mdash; a script outside the repository and outside any manifest</li><li><code class="loc">(repo root)</code> &mdash; no <code>.github/</code>, no <code>.pre-commit-config.yaml</code>, no CI configuration of any kind</li><li><code class="loc">ruff format --check</code> &mdash; 7 of 21 files would be reformatted while the gate reports green</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>The repository's AGENTS.md mandates a three-part gate (ruff, mypy, napoleon-gate) after every implementation. Two of the three have no Makefile target, so they depend on an operator remembering the exact invocation; the third cannot run at all from a fresh clone because its checker lives in the maintainer's home directory. Nothing enforces any of it on push. The measured consequence is a gate that reports clean while <code>E501</code>, the entire complexity family (C901/PLR0912/PLR0915) and formatting are unchecked &mdash; which is precisely why F-06's McCabe-26 function was never surfaced. This is the highest-leverage finding in the report: it is small work that makes every other finding harder to reintroduce.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Configure <code>lint.select</code> explicitly, add <code>ruff</code>/<code>mypy</code>/<code>format-check</code> Makefile targets, vendor the napoleon checker into <code>bin/</code>, and add a minimal CI workflow running the existing commands on the declared Python versions.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add <code>[tool.ruff.lint] select = [...]</code> starting from the current-passing set plus <code>E501</code> and <code>C901</code>, with a per-file ignore or an explicit baseline for the 7 known offenders. 2. Add <code>make lint</code>, <code>make typecheck</code>, <code>make format-check</code>. 3. Move <code>check_napoleon_gate.py</code> into <code>bin/</code> and point the Makefile at it. 4. Add a CI job matrixed over 3.11-3.14 running <code>make pytest lint typecheck napoleon-gate</code>.</p></div>
+</article>
+<article class="card" id="F-08">
+  <div class="card-head">
+    <span class="fid">F-08</span>
+    <h3>40 module-level private functions in the two core domain modules contradict the repository's own architecture policy</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">architecture / policy conformance</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: L</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">repository.py:1168-1777</code> &mdash; 24 module-level private functions &mdash; 608 lines, 34% of the file, outside any class</li><li><code class="loc">config.py:179-746</code> &mdash; 16 module-level private functions, roughly 400 of 746 lines</li><li><code class="loc">AGENTS.md</code> &mdash; &ldquo;prefer cohesive, human-comprehensible classes over large collections of loosely related free functions, even when those classes are mostly stateless&rdquo;</li><li><code class="loc">web.py / skill_installation.py</code> &mdash; 0 and 1 module-level private functions respectively &mdash; these modules already conform</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>This is the repository's own mandated pattern, checked exhaustively across all seven modules rather than noticed incidentally. The functions are not arbitrary: they cluster into five unnamed concepts in repository.py (Markdown codec, document validator, field-value rules, durable filesystem access, selection policy) and three in config.py (document validator, TOML writer, CLI path-name policy). Two measurable costs follow. First, the clusters thread implicit shared context as repeated parameters &mdash; four codec functions pass a <code>source</code> string that is really a missing constructor argument, and four selection functions all take <code>document</code> first. Second, the absence of a class boundary is why the validator has no unit tests (F-04, F-06): there is no object to construct and no seam to test through. The contrast with web.py and skill_installation.py, which conform, shows the policy is achievable in this codebase.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Convert the clusters into classes incrementally, highest-value first: <code>DocumentValidator</code> (unblocks F-06 and much of F-04), then <code>TaskDocumentCodec</code>, then a shared <code>DurableTextFile</code> (which also resolves F-02). Leave the small field-value helpers as functions if no cohesive concept emerges &mdash; the policy targets masses with shared implicit context, not every standalone helper.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Extract <code>DocumentValidator</code> first and land its tests. 2. Extract <code>TaskDocumentCodec</code> holding the parse/render pair plus the <code>source</code> context. 3. Fold <code>_write_document</code>/<code>_fsync_directory</code>/<code>_replace_text</code> into one writer collaborator. 4. Re-run <code>make napoleon-gate</code> after each step; the documentation contract is currently fully satisfied and should stay that way.</p></div>
+</article>
+<article class="card" id="F-09">
+  <div class="card-head">
+    <span class="fid">F-09</span>
+    <h3>Four god classes concentrate unrelated concerns, led by a 1060-line web application object</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">architecture</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: L</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">web.py:81-1140</code> &mdash; <code>KanbanWebApp</code>, 1060 lines, 7 concerns including 646 lines (46% of the module) of hand-assembled HTML</li><li><code class="loc">cli.py:457-910</code> &mdash; <code>CommandRunner</code>, 454 lines: 16-way dispatch, 16 handlers, presentation literals, one business rule</li><li><code class="loc">repository.py:622-1006</code> &mdash; <code>RepositoryTransaction</code>, 385 lines, 14 responsibilities including clock and subprocess access</li><li><code class="loc">skill_installation.py:119-537</code> &mdash; <code>SkillInstaller</code>, 418 lines, 5 separable jobs</li><li><code class="loc">tests/test_web.py</code> &mdash; 63.8 KB / 54 tests &mdash; the test file is larger than the module it tests, and 47 of those tests live in one class</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Graphify scores the cli.py community at 0.06 cohesion and the repository.py community at 0.05 &mdash; the two lowest in an 83-community graph &mdash; and direct reading confirms why: <code>TodoError</code> is the only thing the layers in cli.py share. The practical cost is comprehension and testability. <code>KanbanWebApp</code> mixes selection resolution, socket binding, repository mutation and markup generation in one object, so every board change requires reasoning about all four; its test file being larger than the module is the usual signature of a unit that cannot be tested in units. There is no external product to buy here &mdash; this is structural work, deliberately recorded as a finding rather than a build-vs-buy row.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Extract along the seams the code already suggests: <code>BoardRenderer</code>, <code>SelectionResolver</code> (web.py:137-183), <code>BoardMutations</code> (web.py:460-614) and <code>CollectionProjection</code> (web.py:240-303); a command table for <code>CommandRunner</code>; a <code>CommandLineApplication</code> to own the invocation lifecycle currently living in the <code>main</code> free function (cli.py:1607-1672, McCabe 13).</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Start with <code>BoardRenderer</code> &mdash; it is the largest slice and creates the single escaping chokepoint F-11 wants. 2. Extract <code>SelectionResolver</code> and <code>BoardMutations</code> with constructor injection. 3. Replace <code>CommandRunner</code>'s 16-way dispatch with a class-level command table, collapsing the 6 near-identical mutation handlers (cli.py:697-805, ~110 lines expressing 6 method names). 4. Split <code>KanbanWebTests</code> by concern so server-less tests stop paying for an HTTP server.</p></div>
+</article>
+<article class="card" id="F-10">
+  <div class="card-head">
+    <span class="fid">F-10</span>
+    <h3>38 of 58 <code>TodoError</code> raises omit their error code, and the web layer branches on that code to choose an HTTP status</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness / contract</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: M</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">repository.py:1203-1451, 1514, 1549, 1569, 1626, 1634</code> &mdash; all parser and validator raises omit the code argument and default to <code>invalid_document</code></li><li><code class="loc">web.py:1285-1288</code> &mdash; the POST handler branches on <code>invalid_document</code> to return HTTP 400 rather than 500</li><li><code class="loc">config.py</code> &mdash; 10 raises all coded <code>invalid_config</code>; 11 tests assert only that code</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Because a malformed user submission and a corrupt on-disk file both arrive as <code>invalid_document</code>, the HTTP layer cannot distinguish &ldquo;the operator typed something invalid&rdquo; (400) from &ldquo;this repository's canonical file is damaged&rdquo; (500), and neither can an agent parsing the JSON envelope. This is also the mechanism that hides test gaps: when eight distinct raises render as one <code>400 Bad request</code>, a test asserting the status passes no matter which raise fired, which is exactly how F-05 went unnoticed.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Assign distinct codes to the user-input and file-corruption families, and assert on message identity rather than code in the tests that currently only check the class.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Introduce a code for submission-level validation failures distinct from document corruption. 2. Update web.py:1285-1288 to map the new code to 400 and leave <code>invalid_document</code> as 500. 3. Convert the 11 code-only assertions to message assertions. Coordinate with F-04, which touches the same tests.</p></div>
+</article>
+<article class="card" id="F-11">
+  <div class="card-head">
+    <span class="fid">F-11</span>
+    <h3>646 lines of hand-assembled HTML defended only by roughly 30 manual escape calls and a docstring contract</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">architecture / security-hygiene</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: M</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">web.py</code> &mdash; 18 render methods, ~646 lines (46% of the module), f-string markup with no template layer</li><li><code class="loc">web.py:1101, 1105</code> &mdash; the &ldquo;trusted markup&rdquo; contract for <code>_page(content=...)</code> is enforced only by a docstring</li><li><code class="loc">web.py:785-792, 831-838, 950-956</code> &mdash; the same 8-line modal chrome duplicated three times</li><li><code class="loc">tests/test_web.py:238-263</code> &mdash; the only escaping test &mdash; title-in-card</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>A full escaping audit of every interpolation was performed and <strong>no XSS defect was found</strong>: all roughly 30 sites escape, both free-form sources (<code>Task.title</code> and parsed field values) are escaped at every site, and there is no inline JavaScript or <code>on*</code> attribute anywhere in the file, which removes that bug class entirely. The finding is therefore about the safety <em>margin</em>, not a present hole: correctness rests on a human remembering <code>html.escape</code> at every one of thirty sites, on a trusted-markup convention that only a docstring states, and on a single escaping test. One missed call in a future render method is an injection, and nothing mechanical would catch it.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Extract <code>BoardRenderer</code> with a single escaping chokepoint and add a per-field escaping test. A templating dependency (Jinja2, whose autoescape would make the trusted-markup contract machine-checked) is a genuine option but is blocked by ADR 0007's &ldquo;no Python runtime dependency&rdquo; clause &mdash; see the build-vs-buy matrix.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Extract the render methods into <code>BoardRenderer</code> with one escaping helper all markup must route through. 2. Add a test that submits a hostile payload into every persisted field and asserts it appears escaped in every surface (card, modal, detail, error page). 3. Collapse the triplicated modal chrome. 4. Only then decide the Jinja2 question, with an ADR either way.</p></div>
+</article>
+<article class="card" id="F-12">
+  <div class="card-head">
+    <span class="fid">F-12</span>
+    <h3>The local web server sets no socket timeout, so an idle connection pins a thread indefinitely</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">robustness</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: XS</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">web.py:1143-1161</code> &mdash; <code>KanbanRequestHandler</code> sets no <code>timeout</code> class attribute; the stdlib default is <code>None</code> (verified directly)</li><li><code class="loc">web.py:205, 220</code> &mdash; <code>ThreadingHTTPServer</code> with <code>daemon_threads = True</code></li><li><code class="loc">web.py:1241</code> &mdash; blocking <code>self.rfile.read(length)</code>, reached before the CSRF gate at web.py:1259</li><li><code class="loc">web.py:1219</code> &mdash; <code>int(...)</code> on <code>Content-Length</code> accepts <code>&quot;+5&quot;</code>, <code>&quot; 5 &quot;</code>, <code>&quot;1_0&quot;</code>; the short read at 1241 is never length-checked</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>A client that declares a body length and then sends nothing holds a thread forever, and with <code>daemon_threads = True</code> and no cap, repeated connections exhaust threads and memory. The read is reachable before CSRF verification, needing only a forgeable <code>Host</code> and <code>Origin</code> header. Scope is bounded and should be read honestly: the server binds <code>127.0.0.1</code> only (web.py:205), so this is reachable by local processes on the same machine, not remotely, and no task data is at risk because repository locks are taken later. It is an availability defect in a single-user local tool, which is why it sits at Medium rather than High.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Set a handler <code>timeout</code> and tighten the <code>Content-Length</code> parse. The stdlib <code>socketserver</code> already implements the timeout behaviour; this is a one-line class attribute.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add <code>timeout = 10</code> to <code>KanbanRequestHandler</code>. 2. Replace the <code>int()</code> call with an <code>isdigit()</code> guard, and verify the byte count actually read. 3. Add a test that opens a connection declaring a body and sends none, asserting the server recovers.</p></div>
+</article>
+<article class="card" id="F-13">
+  <div class="card-head">
+    <span class="fid">F-13</span>
+    <h3>Every read fails on a read-only repository, because the shared read lock is opened for append</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">repository.py:520</code> &mdash; <code>os.open(..., O_RDWR | O_CREAT | O_NOFOLLOW)</code> pre-creates the lock file even for a shared read</li><li><code class="loc">repository.py:527</code> &mdash; <code>portalocker.Lock(self.path, mode="a+", ...)</code> &mdash; append mode requires write permission</li><li><code class="loc">repository.py:481-499</code> &mdash; the <code>snapshot</code>/read docstrings do not mention needing write access</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Verified by execution against a scratch repository: with the directory made read-only, both <code>bot-todo --json list</code> and <code>bot-todo --json show T001</code> fail with <code>io_error: cannot open lock file ... Permission denied</code>, and the same happens when the lock file already exists but is not writable. A read-only checkout, an archived project, a repository on read-only media, or a directory owned by another user cannot be inspected at all &mdash; not even by the purely read-only commands. The behaviour is undocumented, so it presents as a bug rather than a constraint.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Either fall back to a lock-free read when the lock cannot be opened for write (accepting the weaker concurrency guarantee for reads), or document the write requirement explicitly in the read paths and in the README.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Decide whether read-only repository support is in scope &mdash; this is a product question. 2. If yes, attempt <code>mode="r"</code> with <code>LOCK_SH</code> and degrade to an unlocked read on <code>PermissionError</code>. 3. If no, state the requirement in the <code>snapshot</code> docstring and the README, and add a test pinning the error message.</p></div>
+</article>
+<article class="card" id="F-14">
+  <div class="card-head">
+    <span class="fid">F-14</span>
+    <h3><code>claim</code> fails outright on a machine without git instead of the documented fallback, and the subprocess runs under the exclusive lock</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness / robustness</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">repository.py:1637-1655</code> &mdash; <code>_current_branch</code>; the docstring promises a <code>no-branch</code> fallback</li><li><code class="loc">repository.py:1648</code> &mdash; <code>subprocess.run(...)</code> with <code>check=False</code> and <strong>no</strong> <code>timeout=</code></li><li><code class="loc">repository.py:850</code> &mdash; reached from <code>claim()</code> <em>inside</em> the exclusive lock</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Verified by running the CLI with an empty <code>PATH</code>: <code>claim</code> returns <code>io_error: [Errno 2] No such file or directory: 'git'</code> and fails the mutation. <code>check=False</code> suppresses a non-zero exit status, not an exec failure, so the promised fallback never triggers when the binary is missing; with git present but outside a work tree the fallback does work correctly (confirmed: <code>"branch": "no-branch"</code>). Separately, because there is no timeout and the call happens while holding the exclusive lock, a hung git blocks every other invocation until each hits the 5-second acquisition timeout and reports <code>conflict</code>. Note this is a clean coded error, not a traceback &mdash; an earlier assessment of this finding overstated it as a crash.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Read the branch from <code>.git/HEAD</code> with pathlib, which removes the <code>subprocess</code> import from the module entirely and makes the fallback unconditional. If the subprocess is retained, add <code>timeout=</code> and catch <code>OSError</code>.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Replace the subprocess with a read of <code>root/.git/HEAD</code>, parsing <code>ref: refs/heads/&lt;name&gt;</code> and falling back to <code>no-branch</code>. 2. Add a test running <code>claim</code> with git unavailable. 3. Move any retained subprocess call outside the lock.</p></div>
+</article>
+<article class="card" id="F-15">
+  <div class="card-head">
+    <span class="fid">F-15</span>
+    <h3>Two thirds of the test suite's wall time is a fixed teardown delay, not test work</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">efficiency / test-suite</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: XS</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">tests/test_web.py:38</code> &mdash; <code>serve_forever()</code> called with no arguments &rarr; stdlib default <code>poll_interval = 0.5</code>, and <code>shutdown()</code> blocks a full interval</li><li><code class="loc">measured</code> &mdash; 501.2 ms teardown per test versus 10.9 ms at <code>poll_interval = 0.01</code></li><li><code class="loc">independent run</code> &mdash; 287 passed in 38.99 s wall, but only 3.57 s user CPU &mdash; roughly 91% of the run is blocked, not computing</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>54 web tests each pay about 0.49 s of pure shutdown latency, roughly 26.5 s of the 39 s run. One argument to one stdlib call is responsible for two thirds of the feedback loop for every developer and agent working in this repository. Fixing it takes the suite to roughly 14 s.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Pass an explicit short poll interval to <code>serve_forever</code> in the test harness.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Change tests/test_web.py:38 to <code>serve_forever(poll_interval=0.01)</code>. 2. Re-measure. 3. Optionally split the 5 server-less tests out of <code>KanbanWebTests</code> so they stop starting a server at all.</p></div>
+</article>
+<article class="card" id="F-16">
+  <div class="card-head">
+    <span class="fid">F-16</span>
+    <h3>Dead packaging configuration, and the published distributions carry no licence file</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">packaging</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">pyproject.toml:2-3</code> &mdash; <code>build-backend = "uv_build"</code></li><li><code class="loc">pyproject.toml:28-33</code> &mdash; <code>[tool.setuptools]</code> and <code>[tool.setuptools.packages.find]</code> &mdash; dead under uv_build; its <code>where = ["."]</code> also contradicts the <code>src/</code> layout</li><li><code class="loc">MANIFEST.in</code> &mdash; a setuptools-only file, also dead; and <code>include LICENSE</code> names a file that does not exist &mdash; the actual file is <code>LICENSE.txt</code></li><li><code class="loc">dist/bot_todo-0.4.0-py3-none-any.whl</code> &mdash; 19 entries, verified by inspection: skill assets ship correctly, but there is no licence file in the wheel and no <code>license</code> field in <code>[project]</code></li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Three configuration blocks in the repository have no effect on the build, which misleads any reader trying to understand how the package is produced &mdash; a future maintainer changing <code>MANIFEST.in</code> to add a data file would find it silently ignored. The substantive defect is that a BSD-licensed project ships wheels and sdists with the licence text omitted, which is a real distribution-compliance gap rather than a cosmetic one. Bundled skill assets, by contrast, do ship correctly and are guarded by tests/test_distribution.py:68.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Delete the dead setuptools configuration and <code>MANIFEST.in</code>; declare the licence through <code>[project]</code> so uv_build includes it.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Remove pyproject.toml:28-33 and <code>MANIFEST.in</code>. 2. Add <code>license = "BSD-3-Clause"</code> (confirm the actual terms) and <code>license-files = ["LICENSE.txt"]</code>. 3. Rebuild and assert the licence is present in both wheel and sdist, extending tests/test_distribution.py.</p></div>
+</article>
+<article class="card" id="F-17">
+  <div class="card-head">
+    <span class="fid">F-17</span>
+    <h3>The repository tracks 6.2 MB of generated and scratch artifacts against 0.4 MB of source and tests</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">repository hygiene</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">graphify-out/</code> &mdash; 57 tracked files, 2.7 MB &mdash; regenerated wholesale by <code>graphify update</code>, including a machine-local AST cache keyed by tool version (<code>cache/ast/v0.9.29/</code>)</li><li><code class="loc">.scratch/</code> &mdash; 42 tracked files, 3.6 MB &mdash; 3.4 MB of it PNG design evidence</li><li><code class="loc">src/ + tests/</code> &mdash; 22 tracked files, 0.41 MB combined</li><li><code class="loc">.gitignore</code> &mdash; ignores build output and tool caches but neither <code>graphify-out/</code> nor <code>.scratch/</code></li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>99 of 151 tracked files are generated or ephemeral. The graph refresh performed at the start of this audit &mdash; a routine, read-only analysis step &mdash; immediately dirtied 7 tracked files and added roughly 50 untracked cache files plus a dated backup directory, which is the everyday cost: every graph regeneration produces a large, unreviewable diff that buries real changes and makes <code>make check-clean</code> (Makefile:26) fail spuriously before a release. The AST cache is keyed by graphify's version, so it also churns entirely on every tool upgrade. Worth recording plainly on the other side: the <code>.scratch/</code> design evidence referenced by <code>design-qa.md</code> was checked and all seven referenced PNGs are present and tracked, so that documentation is genuinely verifiable &mdash; the cost is size and churn, not broken provenance.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Ignore the regenerable graph output while keeping the human-authored specs, and decide deliberately whether the design PNGs belong in history or in an artifact store.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add <code>graphify-out/</code> to <code>.gitignore</code> and <code>git rm -r --cached</code> it; keep <code>GRAPH_REPORT.md</code> if a committed summary is wanted. 2. Keep <code>.scratch/**/*.md</code> (they are linked from task history) but reconsider the 3.4 MB of PNGs. 3. Note that removing them from the index does not shrink existing history; that requires a rewrite, which is likely not worth it at 8.5 MB.</p></div>
+</article>
+<article class="card" id="F-18">
+  <div class="card-head">
+    <span class="fid">F-18</span>
+    <h3><code>SkillInstaller</code> and <code>AggregateRunner</code> are never named in any test, and the installer's failure paths are unverified</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">test-coverage</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: M</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">skill_installation.py:119</code> &mdash; <code>SkillInstaller</code> &mdash; primary class of a 537-line module, never imported by name in <code>tests/</code></li><li><code class="loc">tests/test_skill_installation.py:14-19</code> &mdash; imports only <code>MANIFEST_NAME</code>, <code>TARGET_ASSETS</code>, <code>TARGET_ROOTS</code>, <code>SkillAssets</code></li><li><code class="loc">skill_installation.py:427, 445, 530</code> &mdash; TOCTOU guards; :469-473 and :506-510 rollback handlers &mdash; all untested</li><li><code class="loc">cli.py:1112</code> &mdash; <code>AggregateRunner</code> &mdash; 23 tests exercise it black-box through <code>invoke</code>, none directly</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>skill_installation.py is the lowest-covered module at 87.7%, and the uncovered part is precisely its transactional recovery: the rollback paths that exist to protect a user's <code>~/.claude/skills/todo</code> directory from a half-finished install are the paths no test exercises. Because this module writes outside the repository into agent tool directories, an unverified rollback is the highest-consequence untested code in the project.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Add direct unit tests constructing <code>SkillInstaller</code> against temporary skill roots, with injected failures to drive the rollback branches.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Construct <code>SkillInstaller</code> directly in tests over a temp root. 2. Use <code>mock.patch</code> on the rename/write calls to force <code>OSError</code> and assert the rollback restores the prior tree exactly. 3. Add a test for the <code>_adopt</code> temp-file leak in F-19.</p></div>
+</article>
+<article class="card" id="F-19">
+  <div class="card-head">
+    <span class="fid">F-19</span>
+    <h3><code>_adopt</code> can leak a temp file that the next run classifies as a conflict, blocking further installs</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">skill_installation.py:531-537</code> &mdash; <code>tempfile.mkstemp</code> with no <code>try/finally</code>; a failure at 535-536 leaves the temp file behind</li><li><code class="loc">skill_installation.py:244-276</code> &mdash; <code>_scan</code> then reads that stray file and classifies the tree as a <code>conflict</code></li><li><code class="loc">config.py:714-724</code> &mdash; the equivalent code in config.py gets this right, with a <code>finally</code> cleanup</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>A single interrupted adopt operation leaves a <code>.bot-todo-install-XXXX</code> file inside the user's skill directory. On the next invocation the ownership scan sees an unmanaged file and reports a conflict, so <code>install-skill</code> refuses to proceed and the user must find and delete a hidden temp file by hand to recover. The identical pattern is already implemented correctly elsewhere in the codebase, so this is drift rather than an unsolved problem.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Wrap the <code>mkstemp</code> in <code>try/finally</code> mirroring config.py:714-724.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add the <code>finally</code> cleanup. 2. Add a test forcing a failure between creation and rename, asserting the directory is left clean and the next run classifies correctly.</p></div>
+</article>
+<article class="card" id="F-20">
+  <div class="card-head">
+    <span class="fid">F-20</span>
+    <h3>Stringly-typed domain: task fields keyed by display name, and four task states as magic literals across three modules</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-med">Priority: Medium</span>
+    <span class="badge c-med">Confidence: Medium</span>
+    <span class="badge cat">architecture / type-safety</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: M</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">repository.py:159, 67-77</code> &mdash; <code>Task.fields: dict[str, str]</code> keyed by Markdown <em>display names</em>, ordered by <code>FIELD_ORDER</code></li><li><code class="loc">repository.py:728, 815-826, 846-852, 874-876, 896-897, 917, 946-951</code> &mdash; 15 raw-key mutation sites bypassing the 11 typed property accessors</li><li><code class="loc">repository.py:171-174, 1355, 1614, 1731, 1755; cli.py:421, 1219; web.py:286-297, 342-366, 738, 991-996</code> &mdash; <code>&quot;open&quot;/&quot;review&quot;/&quot;completed&quot;/&quot;cancelled&quot;</code> as bare strings</li><li><code class="loc">skill_installation.py:78</code> &mdash; the Reconciliation Action is a bare <code>str</code>, compared with <code>==</code> at :383-394, despite CONTEXT.md naming it a domain concept</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Renaming a persisted field is a three-module find-and-replace with no compiler assistance, and the four task states &mdash; a closed set named in CONTEXT.md as core domain language &mdash; are typo-prone literals in twelve places. The project already demonstrates the better pattern with <code>TYPE_TAGS</code> and <code>PRIORITY_HEADINGS</code>, and <code>requires-python = "&gt;=3.11"</code> makes <code>enum.StrEnum</code> available at no dependency cost. mypy runs in strict mode and currently reports zero errors, so this typing gap is invisible to the existing gate purely because the values are typed as <code>str</code>.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Introduce <code>StrEnum</code> for task state and for the Reconciliation Action, and route field mutations through the existing typed properties instead of raw keys.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add <code>TaskState(StrEnum)</code> and replace the literals module by module; mypy strict will locate every site. 2. Add <code>ReconciliationAction(StrEnum)</code> in skill_installation.py. 3. Give <code>Task</code> setters for the fields currently mutated by raw key, then narrow <code>fields</code> to internal use.</p></div>
+</article>
+<article class="card" id="F-21">
+  <div class="card-head">
+    <span class="fid">F-21</span>
+    <h3>A 26-line strict collection-read block is duplicated verbatim between the CLI and web layers</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-low">Priority: Low</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">duplication</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">cli.py:1296-1323</code> &mdash; per-repository read loop, failure record, <code>aggregate_partial_failure</code> message</li><li><code class="loc">web.py:254-279</code> &mdash; character-identical, including the <code>f"{len(failures)} of {len(self.collection)} repositories failed: "</code> string</li><li><code class="loc">docs/adr/0011:30</code> &mdash; explicitly <em>rejected</em> generalizing and relocating <code>AggregateRunner</code></li><li><code class="loc">web.py:252-253</code> &mdash; a <code>ponytail:</code> comment defers extraction until &ldquo;a third collection consumer&rdquo;</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>This one needs a careful reading rather than a reflexive DRY verdict. ADR 0011 deliberately decided that board-specific collection reading stays in the web layer instead of generalizing the CLI aggregate subsystem, and that decision should be respected &mdash; <code>AggregateRunner</code>'s placement in cli.py is a recorded choice, not a smell. What the ADR did not address is the verbatim copy of the narrow <em>failure-aggregation</em> block, which is a much smaller extraction than the one it rejected. The in-code comment sets the bar at a third consumer, but the failure-collection half already has two identical ones, and the two copies can now drift silently because the All board is read-only and less exercised. A second, similar duplication exists in the four-state projection written twice inside web.py itself (web.py:280-303 versus 330-368).</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Extract only the failure-aggregation helper, leaving the ADR 0011 boundary intact; separately de-duplicate the two four-state projections inside web.py.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Extract a small <code>collect_repository_failures</code> helper used by both layers. 2. Merge web.py:280-303 and 330-368 into one projection parameterized by whether provenance is shown. 3. Update the <code>ponytail:</code> comment or remove it once the count no longer applies.</p></div>
+</article>
+<article class="card" id="F-22">
+  <div class="card-head">
+    <span class="fid">F-22</span>
+    <h3>The development CLI misreports its own version, and the tested runtime is not a declared one</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-low">Priority: Low</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">release process</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">pyproject.toml:8</code> &mdash; <code>version = "0.4.0"</code></li><li><code class="loc">(execution)</code> &mdash; <code>.venv/bin/bot-todo --version</code> prints <code>bot-todo 0.3.0</code>; the venv holds <code>bot_todo-0.3.0.dist-info</code></li><li><code class="loc">pyproject.toml:17-19</code> &mdash; classifiers declare 3.11, 3.12, 3.13</li><li><code class="loc">(execution)</code> &mdash; <code>.venv/bin/python -V</code> is 3.14.3 &mdash; the only interpreter any test has run on</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p><code>package_version()</code> reads installed distribution metadata, so after <code>bump-my-version</code> updates pyproject and builds a wheel without refreshing the editable install, the development CLI reports a stale version &mdash; and that value is stamped into every skill ownership manifest it writes (skill_installation.py:356). Separately, all 287 tests run exclusively on CPython 3.14 while the package advertises 3.11-3.13 and mypy targets 3.11; with no CI, the three declared versions are entirely unverified, and cli.py:53-55 already probes for a 3.14-only argparse keyword.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Refresh the editable install as part of the release pipeline, and either add 3.14 to the classifiers or add a CI matrix that actually exercises the declared range.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add a sync step to the <code>_release</code> target so the venv matches pyproject. 2. Add the 3.14 classifier. 3. Add the CI matrix from F-07, which turns the declared support into a verified claim.</p></div>
+</article>
+<article class="card" id="F-23">
+  <div class="card-head">
+    <span class="fid">F-23</span>
+    <h3>Provably dead and redundant code paths in four modules</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-low">Priority: Low</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">dead code</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">repository.py:941-942</code> &mdash; unreachable: <code>_require_not_closed</code> at 938 already raises on <code>priority is None</code>; deleting both lines leaves the suite green</li><li><code class="loc">repository.py:1006</code> &mdash; duplicate <code>unknown task ID</code> raise; only the copy at 585 ever runs</li><li><code class="loc">web.py:417-418, 1330-1331</code> &mdash; two <code>selection=None</code> defaults whose bodies are unreachable</li><li><code class="loc">config.py:502-504</code> &mdash; redundant <code>is_absolute()</code> branch &mdash; every absolute path already matched the separator test at 505</li><li><code class="loc">web.py:1342-1346</code> &mdash; status&rarr;title map indexed with <code>[status]</code> over a 4-key dict; a new status in the map at 1332-1341 makes the error renderer itself raise</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>Individually trivial, collectively a comprehension tax: each of these reads as a load-bearing guard, so a maintainer reasoning about <code>close()</code> believes the closed-task check at 941 matters when the real check is three lines earlier. The dead branches are also permanently uncoverable, which quietly caps the achievable coverage figure. The error-renderer indexing is the one with a real failure mode: adding a status code without updating the title map turns an error page into an exception.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Delete the dead paths; convert the status&rarr;title lookup to <code>.get(status, "Error")</code>.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Delete repository.py:941-942 and 1006, web.py:417-418 and 1330-1331, config.py:502-504. 2. Change the title lookup to a defaulted <code>.get</code>. 3. Rename tests/test_cli.py:310 so it no longer claims to cover the guard removed in F-04.</p></div>
+</article>
+<article class="card" id="F-24">
+  <div class="card-head">
+    <span class="fid">F-24</span>
+    <h3>17 near-duplicate tests, concentrated where assertions are weakest</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-low">Priority: Low</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">test-suite</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">tests/test_config.py:227, 235, 249, 258, 335, 350</code> &mdash; 6 tests, identical body <code>text=&lt;L&gt;; assertEqual(load_failure(text).code, &lt;L&gt;)</code></li><li><code class="loc">tests/test_config.py:215, 218, 221, 340, 345</code> &mdash; 5 more, one-line variant, straddling two test classes while mechanically identical</li><li><code class="loc">tests/test_cli.py:255, 274 &middot; test_collection_store.py:256, 268 &middot; test_web.py:507, 533</code> &mdash; three further pairs</li><li><code class="loc">tests/test_config.py:241</code> &mdash; the suite already uses <code>subTest</code> well &mdash; the idiom exists, these are simply un-migrated</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>17 of 287 tests (5.9%) collapse to 5 parametrized tests, a net reduction of 12. The number is deliberately not inflated &mdash; this suite is not bloated. What makes it worth acting on is where the duplication sits: the 11 collapsible tests in tests/test_config.py are 11 of that file's 28, and they are collapsible precisely <em>because</em> they all assert the same undifferentiated error code. Parametrizing them to <code>(input, expected_message)</code> pairs fixes the duplication and the weak assertion in one edit, which is why this is sequenced with F-04 and F-10 rather than as isolated tidying.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Convert each cluster to a single parametrized test keyed on the input and the expected message.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Collapse the two tests/test_config.py clusters first, upgrading the assertion from code to message as part of the same change. 2. Collapse the three remaining pairs. 3. Resolve the class-boundary question the second cluster raises &mdash; it currently spans <code>ValidationTests</code> and <code>SchemaVersionTests</code>.</p></div>
+</article>
+<article class="card" id="F-25">
+  <div class="card-head">
+    <span class="fid">F-25</span>
+    <h3>Task identifiers are HTML-escaped rather than percent-encoded when built into URL paths</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-low">Priority: Low</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">correctness (latent)</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: XS</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">web.py:817, 1003-1006</code> &mdash; <code>html.escape</code> applied to a task id interpolated into a form <code>action</code> path</li><li><code class="loc">web.py (same f-strings)</code> &mdash; the query-string half correctly uses <code>urlencode</code></li><li><code class="loc">repository.py:59, 1493</code> &mdash; <code>TASK_RE</code> and <code>_format_id</code> constrain ids to <code>T\d+</code>, which is why nothing breaks today</li><li><code class="loc">web.py:1280</code> &mdash; the decode side already calls <code>unquote</code>, expecting percent-encoding</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p><code>html.escape</code> does not encode <code>/</code>, <code>?</code>, <code>#</code>, <code>%</code> or space, so it is the wrong tool for a URL path context even though the immediate effect is nil. The safety property lives in a different module's regular expression and is not asserted anywhere near the render site, so widening the task-id format &mdash; a plausible future change, since the format is versioned &mdash; would silently break form actions. Recording it as a latent correctness issue rather than a vulnerability: it is not exploitable at present.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Use <code>urllib.parse.quote(task.task_id, safe="")</code> at both sites, matching the <code>unquote</code> already used on the decode side.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Replace the two escape calls with <code>quote</code>. 2. Add an assertion that a round trip through the form action and back through <code>unquote</code> preserves the id.</p></div>
+</article>
+<article class="card" id="F-26">
+  <div class="card-head">
+    <span class="fid">F-26</span>
+    <h3>The packaged agent skill is tested for its phrasing, not for whether its commands still work</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-low">Priority: Low</span>
+    <span class="badge c-med">Confidence: Medium</span>
+    <span class="badge cat">test-coverage / docs</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: S</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">tests/test_skill_guidance.py</code> &mdash; 7 tests, all regular-expression assertions over the prose of <code>SKILL.md</code></li><li><code class="loc">src/bot_todo/skill_assets/todo/SKILL.md</code> &mdash; 21 fenced <code>bot-todo</code> example commands</li><li><code class="loc">cli.py:1487</code> &mdash; <code>_build_parser()</code> is importable, so validating the examples is cheap</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p><code>SKILL.md</code> is the contract every consuming agent reads, and it is verified for wording (that <code>--json</code> appears, that <code>--all</code> is mentioned once) but never for executability. All 21 documented commands were extracted and parsed against the real parser during this audit and <strong>all 21 parse cleanly</strong>, so there is no drift today &mdash; the finding is that nothing prevents it. Renaming a subcommand would leave the suite green while every agent following the shipped instructions fails.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Add one test that extracts the fenced <code>bot-todo</code> examples and asserts each parses through <code>_build_parser()</code>.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Reuse the existing <code>FENCE</code> regex in tests/test_skill_guidance.py to collect example lines. 2. Assert each parses, treating <code>&lt;placeholder&gt;</code> tokens as opaque strings. 3. Extend the same check to the 31 README examples, excluding the usage-synopsis line.</p></div>
+</article>
+<article class="card" id="F-27">
+  <div class="card-head">
+    <span class="fid">F-27</span>
+    <h3>ADR 0002 is stale on the task-data format marker</h3>
+  </div>
+  <div class="badges">
+    <span class="badge p-low">Priority: Low</span>
+    <span class="badge c-high">Confidence: High</span>
+    <span class="badge cat">documentation</span>
+    <span class="badge s-obs">Observed locally</span>
+    <span class="badge eff">Effort: XS</span>
+  </div>
+  <div class="sec"><h4>Local evidence</h4><ul class="ev"><li><code class="loc">docs/adr/0002:42</code> &mdash; &ldquo;The format marker stays <code>todo-format: 1</code>&rdquo;</li><li><code class="loc">repository.py:35, 37</code> &mdash; <code>READABLE_FORMAT_VERSIONS = frozenset({1, 2})</code>, <code>WRITE_FORMAT_VERSION = 2</code></li><li><code class="loc">docs/adr/0006:25-29</code> &mdash; does record the format-2 decision, including the read-only v1 path</li></ul></div>
+  <div class="sec"><h4>Impact scenario</h4><p>A reader consulting the ADR record in order finds an explicit statement that is no longer true. The scope is narrower than it first appears and is worth stating precisely: the v1&rarr;v2 decision <em>is</em> properly recorded, in ADR 0006 &mdash; only ADR 0002's marker sentence is stale. The fix is a one-line superseding note, not a new ADR.</p></div>
+  <div class="sec"><h4>Recommended direction</h4><p>Annotate ADR 0002's marker statement as superseded by ADR 0006.</p></div>
+  <div class="sec"><h4>Migration outline</h4><p>1. Add a superseded-by note at docs/adr/0002:42 pointing at ADR 0006. 2. No code change.</p></div>
+</article>
+</section>
+
+<section>
+<div class="shead"><span class="sn2">05</span><h2>Build-vs-buy decisions</h2></div>
+<p class="sub" style="margin-bottom:16px">Every row is traceable to a concrete local replacement target
+observed during the capability pass. Structural problems with no external replacement candidate &mdash;
+the god classes, the free-function mass &mdash; are Findings above, not rows here.</p>
+<table class="tbl"><thead><tr><th>Local target</th><th>Current approach / dependency</th>
+<th>Candidate</th><th>Evidence</th><th>Trade-offs</th><th>Recommendation</th></tr></thead>
+<tbody><tr class="reject"><td><code>config.py:651-668</code> <code>_toml_string</code> / <code>_render</code></td><td>Hand-rolled TOML basic-string escaping (4 characters) and document rendering. <code>tomllib</code> is read-only, so the stdlib genuinely does not cover writing.</td><td class="nowrap"><code>tomli-w</code></td><td>Local defect reproduced against the exact implementation (F-03). Offline advisor returned <code>no_match</code> across three query phrasings; the packaged catalog holds 9 profiles, none covering TOML serialization. No external health verification was possible.</td><td>Adds a second runtime dependency to a project that declares exactly one, for roughly 3 lines of escaping. Would change the emitted document's formatting, which the canonical-output tests pin. Package health, maintenance status and licence are <span class="unv-inline">unverified</span>.</td><td><strong>Do not adopt.</strong> Fix the escaping locally &mdash; the correct character set is a known, closed specification. Revisit only if the configuration format grows nested structures.</td></tr><tr class="adopt"><td><code>skill_installation.py:273</code> <code>read_bytes()</code> &rarr; <code>_digest</code></td><td>Reads every file of an arbitrary user tree fully into memory before hashing.</td><td class="nowrap"><code>hashlib.file_digest</code> (standard library, 3.11+)</td><td>Observed locally. <code>requires-python = "&gt;=3.11"</code> (pyproject.toml:10) makes it available with no dependency change; <code>hashlib</code> is already imported at skill_installation.py:5.</td><td>None material &mdash; strictly less memory for the same digest. Small behavioural equivalence check needed on the manifest digests.</td><td><strong>Adopt.</strong> Standard-library swap, no new dependency, removes an unbounded allocation on a user-supplied tree.</td></tr><tr class="adopt"><td><code>skill_installation.py:78</code> action string &middot; task-state literals across 3 modules</td><td>Bare <code>str</code> compared with <code>==</code>; four task states as repeated literals.</td><td class="nowrap"><code>enum.StrEnum</code> (standard library, 3.11+)</td><td>Observed locally (F-20). CONTEXT.md names both as domain concepts; the codebase already uses the constant-set pattern for <code>TYPE_TAGS</code> and <code>PRIORITY_HEADINGS</code>. mypy strict is already clean, so the enum makes the invariant checkable at no gate cost.</td><td>Mechanical migration across three modules; <code>StrEnum</code> keeps string comparison and JSON serialization working unchanged.</td><td><strong>Adopt.</strong> Standard library, no dependency, converts a whole class of typos into type errors.</td></tr><tr class="reject"><td><code>web.py</code> &mdash; 646 lines of hand-assembled HTML across 18 render methods</td><td>f-string markup with roughly 30 manual <code>html.escape</code> calls and a docstring-only trusted-markup contract.</td><td class="nowrap"><code>Jinja2</code></td><td>Observed locally (F-11): full escaping audit found no present defect, but no mechanical enforcement either. ADR 0007 chose the standard library and states a &ldquo;no Python runtime dependency&rdquo; constraint. Jinja2's autoescape would make the contract machine-checked and its macros would collapse triplicated markup; it pulls only MarkupSafe and leaves the server, CSRF and Host checks untouched. External health <span class="unv-inline">unverified</span>.</td><td>Directly contradicts a standing ADR clause. Adds a runtime dependency plus package-data work that tests/test_distribution.py would need to cover. <code>string.Template</code> is explicitly not a substitute &mdash; no autoescape, no loops.</td><td><strong>Do not adopt without superseding ADR 0007.</strong> Take the cheaper structural option first: extract <code>BoardRenderer</code> with one escaping chokepoint plus a per-field escaping test, which removes most of the risk with no dependency. Reassess only if markup volume keeps growing.</td></tr><tr class="reject"><td><code>config.py:123-127</code> <code>default_path</code></td><td>5 lines of <code>os.environ</code> + <code>pathlib</code>: <code>APPDATA</code> on Windows, else <code>XDG_CONFIG_HOME</code> or <code>~/.config</code>.</td><td class="nowrap"><code>platformdirs</code></td><td>Observed locally; no stdlib equivalent exists. Offline advisor returned <code>no_match</code>. Adopting it would return <code>~/Library/Application Support</code> on macOS, changing behaviour and breaking tests/test_config.py:88 and tests/test_collection_store.py:74.</td><td>A dependency for 5 lines, with a behaviour change on the primary development platform. It also does not implement the <code>--config</code> &gt; environment &gt; default precedence chain, which is the genuinely weak half of this area (that logic is split between config.py:22 and cli.py:317-318).</td><td><strong>Retain the local implementation.</strong> XDG-on-macOS is the conventional choice for a developer CLI. Spend the effort instead on consolidating the precedence chain into one module.</td></tr><tr class="reject"><td><code>cli.py:85-124</code> <code>_Parser</code> + <code>cli.py:1443-1463</code> JSON prescan</td><td>Standard-library <code>argparse</code> with a 25-line subclass overriding <code>error()</code>, plus a 21-line raw-argv prescan.</td><td class="nowrap"><code>Click</code> / <code>Typer</code></td><td>Observed locally. Of nine requirements, argparse natively provides seven: nested subcommands with policy propagation (ADR 0003), abbreviation rejection via <code>allow_abbrev=False</code>, no-ANSI output, five mutually-exclusive groups, typed values, and plain-text <code>--help</code>/<code>--version</code> even under <code>--json</code>. The two it cannot provide &mdash; a JSON usage-error <em>document</em>, and choosing the renderer before parsing can fail &mdash; are output concerns that no CLI framework solves either.</td><td>A framework would add a dependency while leaving both actual gaps unaddressed, and would not remove the prescan. Note <code>exit_on_error=False</code> is insufficient as a stdlib alternative: it only converts <code>ArgumentError</code> inside <code>parse_known_args</code>, so overriding <code>error()</code> remains the complete hook.</td><td><strong>Retain.</strong> The build decision was correct and the total local surface is 46 lines. Record it as an ADR so it is not re-litigated.</td></tr></tbody></table>
+</section>
+
+<section>
+<div class="shead"><span class="sn2">06</span><h2>Sequenced opportunity map</h2></div>
+<p class="sub" style="margin-bottom:18px">Ordered by impact, confidence and effort combined, with
+dependencies between items made explicit. Wave 2 is deliberately placed before the larger quality work:
+it is small, and it is what stops the rest from regressing.</p>
+<div class="wave"><h3><span class="wn">1</span> Immediate, near-zero risk</h3><table class="tbl"><thead><tr><th>Finding</th><th>Action</th><th>Effort</th><th>Sequencing / dependency</th></tr></thead><tbody><tr><td><a href="#F-15">F-15</a></td><td>Pass <code>poll_interval=0.01</code> to <code>serve_forever</code></td><td class="nowrap">XS</td><td>Cuts the suite from 39s to ~14s &mdash; speeds up every subsequent item in this map</td></tr><tr><td><a href="#F-01">F-01</a></td><td>Move <code>writer.success</code> inside the error guard</td><td class="nowrap">XS</td><td>Removes a reproducible traceback on the machine contract</td></tr><tr><td><a href="#F-03">F-03</a></td><td>Escape the full TOML control-character set; wrap config.py:483</td><td class="nowrap">S</td><td>Closes the uncaught-exception path</td></tr><tr><td><a href="#F-02">F-02</a></td><td>Delete the duplicated writer; keep the directory fsync</td><td class="nowrap">S</td><td>Restores crash-safety symmetry for config writes</td></tr><tr><td><a href="#F-23">F-23</a></td><td>Delete the five dead paths; default the status&rarr;title lookup</td><td class="nowrap">S</td><td>Removes misleading guards and uncoverable lines</td></tr><tr><td><a href="#F-27">F-27</a></td><td>Mark ADR 0002's marker line superseded by ADR 0006</td><td class="nowrap">XS</td><td>Documentation accuracy</td></tr></tbody></table></div><div class="wave"><h3><span class="wn">2</span> Make the gate real (enables everything after it)</h3><table class="tbl"><thead><tr><th>Finding</th><th>Action</th><th>Effort</th><th>Sequencing / dependency</th></tr></thead><tbody><tr><td><a href="#F-07">F-07</a></td><td>Configure <code>lint.select</code>; add ruff/mypy/format Makefile targets; vendor the napoleon checker; add CI</td><td class="nowrap">S</td><td><strong>Highest leverage in the report.</strong> Without this, every fix below can silently regress</td></tr><tr><td><a href="#F-22">F-22</a></td><td>Sync the editable install in the release target; add the 3.14 classifier</td><td class="nowrap">S</td><td>Depends on the CI matrix from F-07 to become a verified claim</td></tr><tr><td><a href="#F-16">F-16</a></td><td>Delete dead setuptools config and MANIFEST.in; declare the licence</td><td class="nowrap">S</td><td>Independent; fixes a distribution-compliance gap</td></tr><tr><td><a href="#F-17">F-17</a></td><td>Ignore <code>graphify-out/</code>; decide on the design PNGs</td><td class="nowrap">S</td><td>Makes <code>make check-clean</code> and code review usable again</td></tr></tbody></table></div><div class="wave"><h3><span class="wn">3</span> Close the error-path gap (the substantive quality work)</h3><table class="tbl"><thead><tr><th>Finding</th><th>Action</th><th>Effort</th><th>Sequencing / dependency</th></tr></thead><tbody><tr><td><a href="#F-06">F-06</a></td><td>Extract <code>DocumentValidator</code> from the McCabe-26 function</td><td class="nowrap">M</td><td>Blocks and enables F-04 &mdash; creates the seam the tests need</td></tr><tr><td><a href="#F-04">F-04</a></td><td>Add a direct validator unit tier; assert identity not class</td><td class="nowrap">L</td><td>Depends on F-06 for the seam and F-24 for the vehicle</td></tr><tr><td><a href="#F-24">F-24</a></td><td>Parametrize the 5 duplicate clusters, upgrading assertions in the same edit</td><td class="nowrap">S</td><td>Do this <em>with</em> F-04, not separately &mdash; same files, same edit</td></tr><tr><td><a href="#F-10">F-10</a></td><td>Split submission errors from document-corruption errors</td><td class="nowrap">M</td><td>Prerequisite for F-04's identity assertions to be meaningful</td></tr><tr><td><a href="#F-05">F-05</a></td><td>Mirror add-path validation tests onto the edit path; push the rule down</td><td class="nowrap">S</td><td>Independent, mutation-proven gap</td></tr><tr><td><a href="#F-18">F-18</a></td><td>Unit-test <code>SkillInstaller</code> rollback paths</td><td class="nowrap">M</td><td>Highest-consequence untested code &mdash; it writes outside the repository</td></tr><tr><td><a href="#F-19">F-19</a></td><td>Add the <code>finally</code> cleanup to <code>_adopt</code></td><td class="nowrap">S</td><td>Pairs naturally with F-18</td></tr></tbody></table></div><div class="wave"><h3><span class="wn">4</span> Robustness and latent correctness</h3><table class="tbl"><thead><tr><th>Finding</th><th>Action</th><th>Effort</th><th>Sequencing / dependency</th></tr></thead><tbody><tr><td><a href="#F-12">F-12</a></td><td>Set a handler timeout; tighten the <code>Content-Length</code> parse</td><td class="nowrap">XS</td><td>Independent</td></tr><tr><td><a href="#F-14">F-14</a></td><td>Read the branch from <code>.git/HEAD</code>; drop the subprocess</td><td class="nowrap">S</td><td>Also removes a subprocess call from inside the exclusive lock</td></tr><tr><td><a href="#F-13">F-13</a></td><td>Decide read-only repository support, then fix or document it</td><td class="nowrap">S</td><td>Needs a product decision first</td></tr><tr><td><a href="#F-25">F-25</a></td><td>Percent-encode task ids in URL paths</td><td class="nowrap">XS</td><td>Independent</td></tr><tr><td><a href="#F-26">F-26</a></td><td>Assert the packaged skill's examples actually parse</td><td class="nowrap">S</td><td>Cheap insurance on the agent-facing contract</td></tr></tbody></table></div><div class="wave"><h3><span class="wn">5</span> Structural work, once the gate protects it</h3><table class="tbl"><thead><tr><th>Finding</th><th>Action</th><th>Effort</th><th>Sequencing / dependency</th></tr></thead><tbody><tr><td><a href="#F-11">F-11</a></td><td>Extract <code>BoardRenderer</code> with one escaping chokepoint</td><td class="nowrap">M</td><td>Do before any further markup growth; supersedes the Jinja2 question</td></tr><tr><td><a href="#F-09">F-09</a></td><td>Break up the four god classes along their existing seams</td><td class="nowrap">L</td><td>Start with <code>BoardRenderer</code> from F-11</td></tr><tr><td><a href="#F-08">F-08</a></td><td>Convert the free-function clusters into classes, highest value first</td><td class="nowrap">L</td><td>F-06's extraction is step one of this; F-02 is step three</td></tr><tr><td><a href="#F-20">F-20</a></td><td>Introduce <code>StrEnum</code> for task state and reconciliation action</td><td class="nowrap">M</td><td>mypy strict will locate every site</td></tr><tr><td><a href="#F-21">F-21</a></td><td>Extract the failure-aggregation helper only; merge the twin projections</td><td class="nowrap">S</td><td>Respect the ADR 0011 boundary</td></tr></tbody></table></div>
+</section>
+
+<section>
+<div class="shead"><span class="sn2">07</span><h2>Kept deliberately</h2></div>
+<p class="sub" style="margin-bottom:16px">Complete enumeration of what the audit examined and
+concluded should stay as it is. A retained implementation is an expected outcome of the capability
+pass, not a gap in it.</p>
+<div class="kgrid"><article class="kcard"><h4>Bespoke Markdown task-file codec</h4><div class="kloc"><code class="loc">repository.py:1168-1320, 306, 364</code></div><p>No standard-library or existing-dependency replacement exists. It is a line grammar with a byte-exact round-trip requirement frozen by ADR 0002. <code>markdown-it-py</code>, <code>mistune</code> and <code>commonmark</code> would each be a new dependency, would still need the grammar checking layered on top, and &mdash; decisively &mdash; provide no canonical serializer, so the render half stays hand-written regardless. <code>re</code> plus <code>splitlines()</code> is the right tool. The finding here is organization (F-08), not replacement.</p></article><article class="kcard"><h4><code>RepositoryLock</code> over portalocker</h4><div class="kloc"><code class="loc">repository.py:457-543</code></div><p>Already the thin translation layer ADR 0001 prescribes, delegating timeout and retry to <code>portalocker.Lock(timeout=..., check_interval=...)</code>. No hand-rolled retry loop exists anywhere in <code>src</code>, so <code>tenacity</code> and similar have no local target.</p></article><article class="kcard"><h4><code>_fsync_directory</code></h4><div class="kloc"><code class="loc">repository.py:1693-1713</code></div><p>No standard-library equivalent exists, and the Windows limitation is already documented in a <code>ponytail:</code> comment naming the exact weakened guarantee. Keep.</p></article><article class="kcard"><h4><code>_validate_date</code></h4><div class="kloc"><code class="loc">repository.py:1433-1451</code></div><p>Already built on <code>date.fromisoformat</code>, with a deliberate <code>isoformat()</code> re-check to reject non-canonical inputs such as <code>2026-8-17</code> that parse but do not round-trip. Correct as written.</p></article><article class="kcard"><h4>Hand-rolled tree scan in <code>_scan</code></h4><div class="kloc"><code class="loc">skill_installation.py:244-276</code></div><p>Deliberate and correct: <code>os.walk</code> cannot abort on the first symlink, and <code>filecmp.dircmp</code> produces no persistable digest for an ownership manifest. Only the in-memory read (build-vs-buy row 2) should change.</p></article><article class="kcard"><h4>Standard-library HTTP server</h4><div class="kloc"><code class="loc">web.py:205, ADR 0007</code></div><p>An explicit, documented decision. Flask, FastAPI, NiceGUI and Starlette were considered and rejected in the ADR on dependency-weight and async grounds. The audit found the security controls implemented on top of it to be correct: constant-time CSRF comparison, 256-bit token, exact Host and Origin checks, fail-closed on empty origin, loopback-only bind, tight CSP, and headers applied through an <code>end_headers</code> override so even stdlib-generated error pages receive them.</p></article><article class="kcard"><h4>Integration-heavy test pyramid</h4><div class="kloc"><code class="loc">181 of 287 tests (63%) drive the real CLI against real files</code></div><p>A diamond with no base rather than a pyramid, and defensible for this system: bot-todo's contract <em>is</em> its CLI and its on-disk format, so mocking the filesystem would verify nothing. Fixtures are built by invoking the real <code>init</code> (tests/support.py:56), so they cannot drift from the production writer &mdash; a genuine strength. The cost is real and recorded separately as F-04: integration tests reach error branches only through a front door that flattens them.</p></article><article class="kcard"><h4>Wheel-build end-to-end tests</h4><div class="kloc"><code class="loc">tests/test_distribution.py, 2 tests, ~1.9s</code></div><p>The only verification that the package installs and its console script runs outside the checkout, and the only check that bundled skill assets actually ship. Worth its runtime. Noted limitation: it is <code>uv</code>-gated, so it is the first coverage to disappear on another platform.</p></article><article class="kcard"><h4><code>AggregateRunner</code> living in cli.py</h4><div class="kloc"><code class="loc">cli.py:1112, ADR 0011:30</code></div><p>Explicitly considered and rejected for relocation in ADR 0011, on the grounds that its active-only machine/human output contract does not model recent Done work or browser mutations. Not a smell &mdash; a recorded decision. Only the narrow verbatim failure-aggregation copy (F-21) falls outside what the ADR settled.</p></article><article class="kcard"><h4>Seven test files driving cli.py</h4><div class="kloc"><code class="loc">test_cli.py (165 call sites) plus 6 others</code></div><p>Checked as possible fragmentation and found benign: each file owns a coherent slice, and test_web.py and test_repository.py use the CLI as a fixture builder rather than as subject. Naming discipline is good and there are no regression-artifact-named files anywhere in the suite.</p></article><article class="kcard"><h4>The five <code>ponytail:</code> shortcut markers</h4><div class="kloc"><code class="loc">repository.py:579, 984, 1704, 1733; web.py:252</code></div><p>Each names its own ceiling and upgrade path, which is the discipline these markers exist to enforce. The one with a genuine correctness window &mdash; the archive-append/task-file-replace crash gap at repository.py:984 &mdash; is covered by tests/test_repository.py:110. Keep as documented, accepted trade-offs.</p></article><article class="kcard"><h4>Archive-overflow and ID-width boundaries</h4><div class="kloc"><code class="loc">repository.py:51 <code>DONE_LIMIT = 20</code>, <code>MIN_ID_WIDTH</code></code></div><p>Investigated as suspected untested boundaries and found genuinely well pinned: mutating <code>DONE_LIMIT</code> to 19 fails a test and to 21 fails five; mutating <code>MIN_ID_WIDTH</code> from 3 to 4 fails 22. An initial draft finding here was wrong and mutation testing corrected it.</p></article></div>
+<h3 style="margin:26px 0 10px;font-size:16px">Considered, not a real candidate (honest negative results)</h3>
+<div class="panel"><ul style="margin:0;padding-left:20px"><li><strong><code>platformdirs</code></strong> &mdash; Real local target (config.py:123-127) but skeptically rejected: 5 lines, a dependency, a macOS behaviour change breaking two tests, and it does not address the actually-weak precedence chain.</li><li><strong><code>tomli-w</code></strong> &mdash; Real local target and a real local defect, but the defect is a closed, known escaping specification fixable in about 3 lines. A second runtime dependency is not warranted.</li><li><strong><code>Jinja2</code></strong> &mdash; Real local target (646 lines of hand-assembled markup) but blocked by ADR 0007's standing no-runtime-dependency clause, and the cheaper structural fix removes most of the risk. Not recommended without a superseding ADR.</li><li><strong><code>Click</code> / <code>Typer</code></strong> &mdash; The CLI is already standard-library argparse. Seven of nine requirements are native; the two gaps are output concerns no framework addresses. No replacement target exists.</li><li><strong><code>tenacity</code> / retry libraries</strong> &mdash; No local target. Lock acquisition retry is already delegated to <code>portalocker</code>'s own <code>timeout</code> and <code>check_interval</code>; <code>grep</code> found no hand-rolled retry or sleep loop in <code>src</code>.</li><li><strong><code>cachetools</code> / <code>functools</code> caching</strong> &mdash; No local target. No memoization, <code>lru_cache</code> or hand-rolled cache exists anywhere in <code>src</code>.</li><li><strong><code>beautifulsoup4</code> / <code>lxml</code></strong> &mdash; The only near-match the offline catalog returned. They parse HTML and XML; this project generates HTML and parses a bespoke Markdown grammar. Not a fit.</li><li><strong>Markdown parser libraries</strong> &mdash; See Kept deliberately &mdash; no canonical serializer, so the render half would remain hand-written and the dependency would buy nothing.</li><li><strong><code>coverage.py</code> / <code>pytest-cov</code></strong> &mdash; Genuinely missing from the dev dependency group and worth adding, but there is no hand-rolled coverage implementation to replace, so this is a test-evidence gap (see Coverage limits and F-07), not a build-vs-buy decision.</li><li><strong><code>radon</code></strong> &mdash; Same routing: absent tooling, no local replacement target. Recommended as <code>uv tool install radon</code> so the maintainability index stops being unverifiable.</li></ul></div>
+</section>
+
+<section>
+<div class="shead"><span class="sn2">08</span><h2>Coverage limits</h2></div>
+<p class="sub" style="margin-bottom:16px">What was checked, by what method, over what portion &mdash; and
+what specifically could not be established.</p>
+<div class="lim"><h4>Graphify &mdash; available, refreshed</h4><p>The graph was stale at audit start (<code>graph.json</code> dated 12 August against source and documentation changes through 26 August, 25 files newer). Rather than proceed against stale topology, the audit stopped and obtained authorization, then ran <code>graphify update .</code>, producing 1434 nodes, 2761 edges and 83 communities at commit <code>60143bd</code>. Extraction quality: 91% extracted, 9% inferred, 0% ambiguous. Two non-source JSON files produced zero nodes and are absent from the graph (<code>settings.local.json</code>, <code>napoleon_gate_baseline.json</code>); neither affects the analysis. The refresh modified files under <code>graphify-out/</code> only &mdash; see the integrity note in Scope and evidence.</p></div><div class="lim"><h4>CodeGraph &mdash; unavailable</h4><p>No <code>.codegraph/</code> index exists for this repository, so no source-level symbol and call-path index was available to sharpen Graphify nominations. Direct reading and <code>grep</code> were used instead, and every finding was verified against the source regardless.</p></div><div class="lim"><h4>code-index &mdash; actively attempted, unavailable</h4><p><code>code-index-mcp v2.14.0</code> is installed as a uv tool, but no code-index MCP server is exposed in this session; a tool search for its <code>set_project_path</code> and <code>build_deep_index</code> entry points returned no matches, so it could not be initialized. Consequence and substitute: semantic near-duplicate detection across differently-named files was replaced by AST-normalized structural duplicate detection over <strong>all 12 test files and all 287 tests</strong> (not a sample), plus targeted <code>grep</code> and byte-level diffing across all 7 source modules. That substitute is what found the byte-identical duplication in F-02 and the five test clusters in F-24, so the gap is narrower than the missing tool implies &mdash; but a semantic index might have surfaced conceptual near-duplicates that share no tokens, and none of those can be ruled out.</p></div><div class="lim"><h4>Line coverage &mdash; measured, but not by coverage.py</h4><p><code>coverage.py</code> and <code>pytest-cov</code> are absent from <code>.venv</code> and undeclared in the dev dependency group, and installing them was out of scope. Coverage was therefore obtained by instrumenting the suite with the standard library's <code>sys.monitoring</code>, recording each line once: <strong>93.2% (2374 of 2548 lines)</strong> over 100% of <code>src</code>, with error-path lines separately at 71.4%. This figure is line coverage only. <span class="unv-inline">Branch coverage was not measured</span> and would be lower. Recommendation: add <code>pytest-cov</code> to the dev group so this is reproducible rather than reconstructed.</p></div><div class="lim"><h4>Per-test coverage attribution &mdash; unavailable</h4><p><code>--cov-context=test</code> requires coverage.py, so per-test line attribution could not be used for redundant-test detection. Substitute method and its exact scope: every one of the 287 test functions was parsed and its body normalized (literals erased) to find mechanically identical tests, yielding 5 clusters covering 17 tests. This finds literal-parameter duplication reliably; it does <span class="unv-inline">not</span> find tests that cover the same production lines by different routes, which only per-test contexts would reveal.</p></div><div class="lim"><h4>Cyclomatic complexity &mdash; measured, but not by radon</h4><p><code>radon</code> is absent from <code>.venv</code>, <code>$PATH</code>, <code>~/.local/bin</code> and <code>uv tool list</code>. Complexity was obtained instead from ruff's McCabe implementation (<code>--select C901</code> with the threshold driven to zero), giving real per-function scores over 100% of <code>src</code>: 223 functions, mean 2.43, maximum 26. Independently re-verified during report preparation at a threshold of 8, which reports exactly 7 functions. This is genuine McCabe, not a grep proxy.</p></div><div class="lim"><h4>Maintainability index &mdash; unverified</h4><p>This is the one metric that could not be closed. The maintainability index is a radon-specific composite of Halstead volume, cyclomatic complexity, source lines and comment ratio; ruff implements no equivalent and there is no standard-library substitute. <strong>No file was graded, and the count of files at the worst grade is unknown.</strong> Remedy before the next audit: <code>uv tool install radon</code>.</p></div><div class="lim"><h4>Mutation testing &mdash; deliberately partial</h4><p>Test-gap findings were confirmed by hand-applied mutation against a scratch copy of the tree, not by a mutation-testing framework, and were targeted at roughly a dozen specific guards rather than the whole codebase. Nine gaps are labelled mutation-confirmed (guard removed, suite still green); the remaining gaps in F-04 rest on never-executed evidence only and are labelled accordingly. A methodological failure is worth recording: the first mutation battery was invalid because <code>.venv/bot_todo.pth</code> points at the real <code>src</code>, so mutants never loaded and every apparent survival was meaningless; it was detected by asserting <code>__file__</code> and the mutated constant before each run, and re-executed under an explicit <code>PYTHONPATH</code>. Only corrected-battery results appear in this report.</p></div><div class="lim"><h4>External package health &mdash; unverified</h4><p>The offline <code>python-package-advisor</code> catalog was consulted once per qualifying candidate with <code>--role audit</code>, as required, and returned <code>no_match</code> for TOML writing, platform config directories and CLI parsing, and <code>needs_clarification</code> resolving to an unrelated markup-parsing profile for the rest; the packaged catalog contains 9 profiles in total. No network verification of maintenance status, release cadence, advisories, licences or OpenSSF signals was performed for <code>tomli-w</code>, <code>Jinja2</code> or <code>platformdirs</code>. <strong>No adoption is recommended on the strength of unverified evidence</strong> &mdash; the two adopt recommendations in the matrix are standard-library only.</p></div><div class="lim"><h4>Runtime matrix &mdash; single interpreter</h4><p>Every command in this audit ran on CPython 3.14.3, the only interpreter in the project's <code>.venv</code>. The package declares support for 3.11, 3.12 and 3.13 and mypy targets 3.11, but <span class="unv-inline">none of those three was exercised</span> and no CI configuration exists in the repository to exercise them. Behaviour differences on the declared versions are therefore unverified &mdash; a live concern, since cli.py:53-55 already branches on a 3.14-only argparse feature.</p></div><div class="lim"><h4>Not in scope</h4><p>The following were deliberately not audited: the rendered contents of <code>graphify-out/graph.html</code> and <code>GRAPH_REPORT.md</code> as documents; the substantive correctness of the 42 specification and plan documents under <code>.scratch/</code>; visual comparison of the 3.4 MB of design PNGs (their presence and tracked status were verified, and all seven files referenced by <code>design-qa.md</code> exist); and the uncommitted working-tree modification to <code>TODO.md</code>, which predates this session. Isolated ruff and mypy findings are outside this report's remit by design and are reported only where they demonstrate a broader pattern &mdash; F-07 is the one place they do.</p></div>
+</section>
+
+<footer>
+Codebase Architecture &amp; Capability Audit &mdash; bot-todo at commit 60143bd &middot; generated
+2026-08-27 &middot; read-only: no file in the audited repository was modified by this audit apart from
+the authorized <code>graphify-out/</code> refresh disclosed above. Self-contained document; no external
+resources are loaded.
+</footer>
+</div></body></html>

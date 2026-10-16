@@ -1,18 +1,27 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 20 -->
+<!-- todo-format: 2; next-id: 22 -->
 
 ## P0 — Critical / Blocking
 
 ## P1 — High Priority
 
-- [ ] **T019** Make ruff ALL config pass without rewriting the codebase #chore
-  - Acceptance: make ruff exits 0. Config matches Napoleon/Google first-line summaries and this non-Django CLI. Remaining src violations are ignored or fixed.
-  - Context: Uncommitted pyproject.toml select=ALL copied from Django/Wagtail; 254 errors.
-  - Review: 2026-08-28
+- [ ] **T020** Investigate Cursor adding a note instead of context #bug
+  - Acceptance: Root cause identified for why Cursor sends a note/notes field that bot-todo does not have; fix or documented mitigation so the call no longer errors.
 
 ## P2 — Backlog
 
 ## Done (recent)
+
+- [x] **T021** Color P0 and P1 Kanban priority badges #feature
+  - Acceptance: Board cards show P0 in bg-red-lt, P1 in bg-yellow-lt, and P2 unchanged in bg-blue-lt.
+  - Outcome: completed
+  - Closed: 2026-09-04
+
+- [x] **T019** Make ruff ALL config pass without rewriting the codebase #chore
+  - Acceptance: make ruff exits 0. Config matches Napoleon/Google first-line summaries and this non-Django CLI. Remaining src violations are ignored or fixed.
+  - Context: Uncommitted pyproject.toml select=ALL copied from Django/Wagtail; 254 errors.
+  - Outcome: completed
+  - Closed: 2026-08-28
 
 - [x] **T018** Web command repo switcher across global config repos #feature
   - Acceptance: Web UI shows a repo menu listing 'All' plus each repo from the global config; selecting a repo shows only that repo's tasks; selecting 'All' shows the aggregated tasks of every configured repo, each labeled with its repository.

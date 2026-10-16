@@ -613,6 +613,21 @@ class KanbanWebApp:
                 return transaction.close(task_id, "cancelled", fields.get("reason"))
             raise TodoError("unknown transition action", "usage")
 
+    def _priority_badge_class(self, task: Task) -> str:
+        """Choose the Tabler badge background for a card's priority or state.
+
+        Args:
+            task: Task whose priority badge is rendered.
+
+        Returns:
+            Tabler light-badge class for P0, P1, or the default blue.
+        """
+        if task.priority == "P0":
+            return "bg-red-lt"
+        if task.priority == "P1":
+            return "bg-yellow-lt"
+        return "bg-blue-lt"
+
     def _render_card(
         self, row: BoardTask, *, writable: bool, selection: BoardSelection
     ) -> str:
@@ -646,7 +661,8 @@ class KanbanWebApp:
             f'<button type="button" class="task-title" data-bs-toggle="modal" '
             f'data-bs-target="#{modal_id}"><strong>{task_id}</strong> '
             f"{title}</button>"
-            f'<div class="mt-2">{provenance}<span class="badge bg-blue-lt">'
+            f'<div class="mt-2">{provenance}<span class="badge '
+            f'{self._priority_badge_class(task)}">'
             f"{html.escape(task.priority or task.state)}</span> "
             f'<span class="badge bg-secondary-lt">{html.escape(task.task_type or "untyped")}'
             f"</span></div>{actions}</div></article>"

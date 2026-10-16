@@ -265,6 +265,33 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertLess(body.index(reviewing.task_id), body.index(completed.task_id))
         self.assertLess(body.index(completed.task_id), body.index(cancelled.task_id))
 
+    def test_board_colors_priority_badges(self) -> None:
+        """Catch P0 and P1 cards sharing P2's blue priority badge."""
+        with self.store.transaction() as transaction:
+            transaction.add(
+                title="Critical work", priority="P0", task_type="bug", simple=True
+            )
+            transaction.add(
+                title="High work", priority="P1", task_type="feature", simple=True
+            )
+            transaction.add(
+                title="Backlog work", priority="P2", task_type="chore", simple=True
+            )
+            done = transaction.add(
+                title="Finished work", priority="P2", task_type="chore", simple=True
+            )
+            transaction.close(done.task_id, "completed")
+
+        status, _, body = self.get("/")
+
+        self.assertEqual(status, 200)
+        self.assertIn('<span class="badge bg-red-lt">P0</span>', body)
+        self.assertIn('<span class="badge bg-yellow-lt">P1</span>', body)
+        self.assertIn('<span class="badge bg-blue-lt">P2</span>', body)
+        self.assertIn('<span class="badge bg-blue-lt">completed</span>', body)
+        self.assertNotIn('<span class="badge bg-blue-lt">P0</span>', body)
+        self.assertNotIn('<span class="badge bg-blue-lt">P1</span>', body)
+
     def test_board_shows_canonical_details_in_a_tabler_modal(self) -> None:
         """Catch a board that omits persisted task fields or restores a detail page."""
         with self.store.transaction() as transaction:

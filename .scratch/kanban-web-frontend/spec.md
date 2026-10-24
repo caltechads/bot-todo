@@ -103,8 +103,16 @@ Each POST requires a process-local CSRF token, an exact loopback Host and
 Origin, URL-encoded input, at most 32 fields, and at most 64 KiB. Responses
 disable storage, framing, sniffing, and cross-origin referrers. The content
 security policy permits jsDelivr only for remote styles, scripts, and fonts;
-`data:` images remain allowed for Tabler; and all other sources remain
-restricted.
+same-origin scripts and `fetch()` for live reload; `data:` images remain
+allowed for Tabler; and all other sources remain restricted.
+
+Live reload: every 200 board page embeds an opaque `data-board-version` token,
+computed from `stat()` of the selected `TODO.md` file(s) before the snapshot
+read, and loads the same-origin `/live-reload.js`. While the tab is visible the
+script polls `GET /board-version?repo=<key>` every 2 seconds and reloads when
+the token differs, unless a modal, a card Cancel-reason form, or a focused form
+control is in use; the next idle tick reloads instead. All covers every
+configured repository. Error pages never load the script. See ADR 0012.
 
 Unknown paths, including former `GET /tasks/{task_id}` URLs, return 404;
 malformed forms return 400; request trust failures
@@ -118,6 +126,6 @@ the repository menu, and renders no partial task cards.
 
 Authentication, non-loopback binding, collection-wide mutations,
 drag-and-drop, claims, full archive listing, live configuration reload,
-polling, WebSockets, and a JSON API remain outside this board. Task editing of
+WebSockets, and a JSON API remain outside this board. Task editing of
 open and Review work is available after selecting one Task Repository; the
 collection-wide view remains read-only.

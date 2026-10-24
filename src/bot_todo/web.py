@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import html
 import re
 import secrets
@@ -17,6 +18,7 @@ from bot_todo.config import RepositoryCollection
 from bot_todo.repository import (
     PRIORITY_HEADINGS,
     SIMPLE_TAG,
+    TODO_FILENAME,
     TYPE_TAGS,
     WRITE_FORMAT_VERSION,
     Task,
@@ -39,11 +41,35 @@ SECURITY_HEADERS = (
         "Content-Security-Policy",
         (
             "default-src 'none'; style-src 'unsafe-inline' https://cdn.jsdelivr.net; "
-            "script-src https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; "
+            "script-src 'self' https://cdn.jsdelivr.net; connect-src 'self'; "
+            "font-src https://cdn.jsdelivr.net; "
             "img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
         ),
     ),
 )
+#: Board script that reloads once ``/board-version`` reports a new token.
+LIVE_RELOAD_SCRIPT = """(() => {
+  const board = document.querySelector("[data-board-version]");
+  if (!board) return;
+  const busy = () =>
+    document.querySelector(".modal.show, .actions details[open]") !== null ||
+    (document.activeElement?.matches("input, textarea, select") ?? false);
+  async function poll() {
+    if (document.hidden) return;
+    try {
+      const response = await fetch(board.dataset.versionUrl, { cache: "no-store" });
+      if (!response.ok) return;
+      if ((await response.text()) !== board.dataset.boardVersion && !busy()) {
+        location.reload();
+      }
+    } catch {
+      // Server stopped or restarting; try again next tick.
+    }
+  }
+  setInterval(poll, 2000);
+  document.addEventListener("visibilitychange", poll);
+})();
+"""
 
 
 @dataclass(frozen=True)
@@ -303,6 +329,33 @@ class KanbanWebApp:
             ("Cancelled", cancelled_rows),
         )
 
+    def board_version(self, selection: BoardSelection) -> str:
+        """Fingerprint the ``TODO.md`` file(s) behind one board selection.
+
+        Side Effects:
+            Stats the selected ``TODO.md`` files.
+
+        Args:
+            selection: Request-local board selection.
+
+        Returns:
+            Opaque SHA-256 hex token over each file's path, mtime, and size;
+            a missing or unreadable file contributes a fixed sentinel.
+        """
+        if selection.store is not None:
+            paths = [selection.store.todo_path]
+        else:
+            paths = [entry.path / TODO_FILENAME for entry in self.collection]
+        digest = hashlib.sha256()
+        for path in paths:
+            try:
+                stat = path.stat()
+                part = f"{stat.st_mtime_ns}:{stat.st_size}"
+            except OSError:
+                part = "missing"
+            digest.update(f"{path}\0{part}\n".encode())
+        return digest.hexdigest()
+
     def render_board(self, selection: BoardSelection) -> str:
         """Render all recent tasks in Task State columns.
 
@@ -315,6 +368,10 @@ class KanbanWebApp:
         Returns:
             Complete board HTML document.
         """
+        # Stat before reading so a racing write costs one extra reload, never a
+        # missed change.
+        version = self.board_version(selection)
+        version_url = f"/board-version?{urlencode({'repo': selection.key})}"
         columns: tuple[tuple[str, list[BoardTask]], ...]
         if selection.store is None:
             columns = self._collection_columns()
@@ -396,7 +453,10 @@ class KanbanWebApp:
         )
         content = (
             f"{mutation_area}{detail_modals}"
-            f'<div class="board-columns">{columns_html}</div>'
+            f'<div class="board-columns" data-board-version="{version}" '
+            f'data-version-url="{html.escape(version_url, quote=True)}">'
+            f"{columns_html}</div>"
+            '<script src="/live-reload.js"></script>'
         )
         return self._page(
             "Kanban Board",
@@ -1177,10 +1237,10 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     def do_GET(self) -> None:
-        """Serve one board page.
+        """Serve one board page, board version token, or live-reload script.
 
         Side Effects:
-            Reads a repository and writes an HTTP response.
+            Reads or stats repositories and writes an HTTP response.
         """
         if not self._trusted_host():
             self._send_html(
@@ -1200,6 +1260,14 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
         try:
             if parts.path == "/":
                 self._send_html(200, self.app.render_board(selection))
+                return
+            if parts.path == "/board-version":
+                self._send_body(
+                    200, self.app.board_version(selection), "text/plain"
+                )
+                return
+            if parts.path == "/live-reload.js":
+                self._send_body(200, LIVE_RELOAD_SCRIPT, "text/javascript")
                 return
         except TodoError as error:
             self._send_todo_error(error, selection)
@@ -1382,9 +1450,22 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
             status: HTTP response status.
             body: Complete HTML document.
         """
+        self._send_body(status, body, "text/html")
+
+    def _send_body(self, status: int, body: str, media_type: str) -> None:
+        """Write one UTF-8 text response.
+
+        Side Effects:
+            Writes status, headers, and body to the client socket.
+
+        Args:
+            status: HTTP response status.
+            body: Complete response body.
+            media_type: MIME type sent with a UTF-8 charset.
+        """
         encoded = body.encode()
         self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", f"{media_type}; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)

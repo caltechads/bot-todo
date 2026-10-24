@@ -7,13 +7,14 @@
 
 ## P2 — Backlog
 
-- [ ] **T022** Live-reload web board when TODO.md changes on disk #feature #web
+## Done (recent)
+
+- [x] **T022** Live-reload web board when TODO.md changes on disk #feature #web
   - Acceptance: An open web board reflects external TODO.md edits (CLI or editor) within a few seconds without a manual refresh, for both a single repository and the All board; auto-refresh does not discard an open modal or a half-filled form
   - Context: Decision: polling, no watchdog. Every request already re-reads TODO.md via TodoStore(...).snapshot() (src/bot_todo/web.py), so the server never serves stale data; only the browser needs telling. Add a small endpoint returning the TODO.md mtime(s) for the current selection (all configured repos for the All board); page JS polls it every few seconds and calls location.reload() when the value changes, skipping the reload while a modal or form is open. No new dependency, no long-lived connections.
   - Related: Plan: .scratch/kanban-web-frontend/t022-live-reload-plan.md; ADR: docs/adr/0012-poll-a-board-version-token-for-live-reload.md
-  - Claimed: claude | 2026-10-23 | master
-
-## Done (recent)
+  - Outcome: completed
+  - Closed: 2026-10-23
 
 - [x] **T020** Investigate Cursor adding a note instead of context #bug
   - Acceptance: Root cause identified for why Cursor sends a note/notes field that bot-todo does not have; fix or documented mitigation so the call no longer errors.
@@ -135,9 +136,3 @@
   - Context: .scratch/installable-bot-todo/spec.md phase 2; .scratch/installable-bot-todo/phase-2-plan.md
   - Outcome: completed
   - Closed: 2026-08-12
-
-- [x] **T002** Extract the single-repository core into an installable bot-todo package #feature
-  - Acceptance: The wheel installs and runs outside the checkout, format-1 data works without migration, and locking, durability, archive decoupling, discovery, and unsafe-file rejection have runnable coverage.
-  - Context: .scratch/installable-bot-todo/spec.md phase 1; docs/adr/0001, docs/adr/0002
-  - Outcome: completed
-  - Closed: 2026-08-11

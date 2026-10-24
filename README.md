@@ -173,6 +173,9 @@ cancel work. Claims and full-archive browsing remain CLI-only. A Task Data
 Format 1 repository is displayed read-only with instructions to run
 `bot-todo migrate`.
 
+An open board refreshes itself within about 2 seconds of an external `TODO.md`
+change (CLI or editor), except while a dialog or form is in use.
+
 This is a local human interface, not a remotely deployable service. It has no
 authentication and deliberately provides no option to bind beyond loopback.
 

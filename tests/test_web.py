@@ -6,6 +6,7 @@ import contextlib
 import errno
 import http.client
 import io
+import os
 import re
 import socket
 import tempfile
@@ -825,7 +826,7 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertNotIn('<h1 class="page-title">Kanban Board</h1>', body)
         policy = headers["Content-Security-Policy"]
         self.assertIn("style-src 'unsafe-inline' https://cdn.jsdelivr.net", policy)
-        self.assertIn("script-src https://cdn.jsdelivr.net", policy)
+        self.assertIn("script-src 'self' https://cdn.jsdelivr.net", policy)
         self.assertIn("font-src https://cdn.jsdelivr.net", policy)
         self.assertIn("img-src data:", policy)
 
@@ -1347,6 +1348,89 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(status, 404)
         self.assertIn("The requested page does not exist", body)
 
+    def test_board_version_is_stable_and_plain_text(self) -> None:
+        """Catch a version token that churns without a TODO.md change."""
+        status, headers, first = self.get("/board-version")
+        _, _, second = self.get("/board-version")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/plain; charset=utf-8")
+        self.assertRegex(first, r"^[0-9a-f]{64}$")
+        self.assertEqual(first, second)
+
+    def test_board_version_changes_after_store_write(self) -> None:
+        """Catch a token that misses CLI-style mutations."""
+        _, _, before = self.get("/board-version")
+        with self.store.transaction() as transaction:
+            transaction.add(
+                title="Fresh", priority="P2", task_type="chore", simple=True
+            )
+
+        _, _, after = self.get("/board-version")
+
+        self.assertNotEqual(before, after)
+
+    def test_board_version_tracks_mtime_and_size_independently(self) -> None:
+        """Catch a token built from only one of mtime or size."""
+        path = self.store.todo_path
+        original_ns = path.stat().st_mtime_ns
+        _, _, baseline = self.get("/board-version")
+
+        os.utime(path, ns=(original_ns, original_ns + 1_000_000_000))
+        _, _, touched = self.get("/board-version")
+        self.assertNotEqual(baseline, touched)
+
+        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        os.utime(path, ns=(original_ns, original_ns + 1_000_000_000))
+        _, _, grown = self.get("/board-version")
+        self.assertNotEqual(touched, grown)
+
+    def test_board_version_applies_host_and_selection_checks(self) -> None:
+        """Catch the version endpoint bypassing the board's guards."""
+        status, _, _ = self.get("/board-version?repo=nope")
+        self.assertEqual(status, 404)
+        status, _, _ = self.request(
+            "GET", "/board-version", headers={"Host": "evil.example"}
+        )
+        self.assertEqual(status, 403)
+
+    def test_board_embeds_version_and_live_reload_script(self) -> None:
+        """Catch a board whose baseline or poll URL drifts from the endpoint."""
+        _, _, body = self.get("/?repo=current")
+        _, _, token = self.get("/board-version?repo=current")
+
+        self.assertIn(f'data-board-version="{token}"', body)
+        self.assertIn('data-version-url="/board-version?repo=current"', body)
+        self.assertIn('<script src="/live-reload.js"></script>', body)
+
+    def test_live_reload_script_is_served_same_origin(self) -> None:
+        """Catch a missing script route or a CSP that blocks it."""
+        status, headers, body = self.get("/live-reload.js")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertIn("location.reload()", body)
+        self.assertIn("data-board-version", body)
+        policy = headers["Content-Security-Policy"]
+        self.assertIn("script-src 'self' https://cdn.jsdelivr.net", policy)
+        self.assertIn("connect-src 'self'", policy)
+
+    def test_error_pages_do_not_load_live_reload(self) -> None:
+        """Catch a POST result page that would resubmit on auto-reload."""
+        with self.store.transaction() as transaction:
+            task = transaction.add(
+                title="Reviewing", priority="P2", task_type="chore", simple=True
+            )
+            transaction.review(task.task_id)
+
+        status, _, body = self.post(
+            f"/tasks/{task.task_id}/transition", {"action": "review"}
+        )
+
+        self.assertEqual(status, 409)
+        self.assertNotIn("/live-reload.js", body)
+
 
 class CollectionKanbanWebTests(unittest.TestCase):
     """Exercise a collection-wide Kanban Board through loopback HTTP."""
@@ -1571,6 +1655,7 @@ class CollectionKanbanWebTests(unittest.TestCase):
         self.assertIn("repository_not_found", body)
         self.assertIn("/?repo=alpha.one", body)
         self.assertNotIn("Healthy title", body)
+        self.assertNotIn("/live-reload.js", body)
 
     def test_empty_collection_all_board_has_four_empty_columns(self) -> None:
         """Catch All requiring Current or hiding empty state columns."""
@@ -1682,3 +1767,28 @@ class CollectionKanbanWebTests(unittest.TestCase):
 
         self.assertEqual(status, 403)
         self.assertIn("Forbidden", body)
+
+    def test_all_board_version_tracks_every_repository(self) -> None:
+        """Catch an All token that ignores a non-first repository."""
+        _, _, body = self.get("/?repo=all")
+        _, _, before = self.get("/board-version?repo=all")
+        self.assertIn(f'data-board-version="{before}"', body)
+        self.assertIn('data-version-url="/board-version?repo=all"', body)
+
+        with TodoStore(self.beta).transaction() as transaction:
+            transaction.add(
+                title="Beta change", priority="P2", task_type="chore", simple=True
+            )
+
+        _, _, after = self.get("/board-version?repo=all")
+        self.assertNotEqual(before, after)
+
+    def test_all_board_version_tolerates_missing_todo_file(self) -> None:
+        """Catch a vanished TODO.md turning the poll into an error."""
+        (self.beta / "TODO.md").unlink()
+
+        status, _, first = self.get("/board-version?repo=all")
+        _, _, second = self.get("/board-version?repo=all")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(first, second)

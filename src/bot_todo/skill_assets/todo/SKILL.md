@@ -66,6 +66,7 @@ Mutations follow the same shape; `edit`, `release`, `review`, `reopen`,
 
 ```bash
 bot-todo --json --root <repo> add "Title" --type bug --priority P1 --acceptance "Done when..."
+bot-todo --json --root <repo> add "Title" --type feature --acceptance "Done when..." --context "Background, links" --related T002 --blocked-by T003 --tag web
 bot-todo --json --root <repo> claim T001 --actor codex
 bot-todo --json --root <repo> review T001
 bot-todo --json --root <repo> reopen T001
@@ -85,6 +86,10 @@ bot-todo --json repos add
 bot-todo --json repos add --name ledger
 bot-todo --json repos remove bot-todo
 ```
+
+Tasks have no notes field and the CLI has no `--note` or `--notes` option.
+Put background, findings, and spec links in `--context`; use `--related` and
+`--blocked-by` for other task IDs. `edit` takes the same three options.
 
 Require exactly one type: `bug`, `chore`, `docs`, `feature`, or `ops`. Require
 acceptance criteria unless `--simple` deliberately marks a trivial task. Keep

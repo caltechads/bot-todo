@@ -1,16 +1,23 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 22 -->
+<!-- todo-format: 2; next-id: 23 -->
 
 ## P0 — Critical / Blocking
 
 ## P1 — High Priority
 
-- [ ] **T020** Investigate Cursor adding a note instead of context #bug
-  - Acceptance: Root cause identified for why Cursor sends a note/notes field that bot-todo does not have; fix or documented mitigation so the call no longer errors.
-
 ## P2 — Backlog
 
+- [ ] **T022** Live-reload web board when TODO.md changes on disk #feature #web
+  - Acceptance: An open web board reflects external TODO.md edits (CLI or editor) within a few seconds without a manual refresh, for both a single repository and the All board; auto-refresh does not discard an open modal or a half-filled form
+  - Context: Decision: polling, no watchdog. Every request already re-reads TODO.md via TodoStore(...).snapshot() (src/bot_todo/web.py), so the server never serves stale data; only the browser needs telling. Add a small endpoint returning the TODO.md mtime(s) for the current selection (all configured repos for the All board); page JS polls it every few seconds and calls location.reload() when the value changes, skipping the reload while a modal or form is open. No new dependency, no long-lived connections.
+
 ## Done (recent)
+
+- [x] **T020** Investigate Cursor adding a note instead of context #bug
+  - Acceptance: Root cause identified for why Cursor sends a note/notes field that bot-todo does not have; fix or documented mitigation so the call no longer errors.
+  - Context: Root cause: SKILL.md add example never showed --context/--related/--blocked-by/--tag, so agents guessed --note (rejected as usage error). Cursor's installed skill was also stale. Fix: document free-text options + no-notes line, guidance tests, reinstall Cursor skill.
+  - Outcome: completed
+  - Closed: 2026-10-17
 
 - [x] **T021** Color P0 and P1 Kanban priority badges #feature
   - Acceptance: Board cards show P0 in bg-red-lt, P1 in bg-yellow-lt, and P2 unchanged in bg-blue-lt.
@@ -130,11 +137,5 @@
 - [x] **T002** Extract the single-repository core into an installable bot-todo package #feature
   - Acceptance: The wheel installs and runs outside the checkout, format-1 data works without migration, and locking, durability, archive decoupling, discovery, and unsafe-file rejection have runnable coverage.
   - Context: .scratch/installable-bot-todo/spec.md phase 1; docs/adr/0001, docs/adr/0002
-  - Outcome: completed
-  - Closed: 2026-08-11
-
-- [x] **T001** Plan the installable bot-todo architecture #docs
-  - Acceptance: Wayfinder decisions produce a build-ready architecture specification and phased implementation plan.
-  - Context: .scratch/installable-bot-todo/map.md
   - Outcome: completed
   - Closed: 2026-08-11

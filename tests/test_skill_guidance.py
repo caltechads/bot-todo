@@ -82,3 +82,11 @@ class SkillGuidanceTests(unittest.TestCase):
     def test_skill_documents_review_and_migrate(self) -> None:
         self.assertIn("`review`", self.text)
         self.assertIn("`migrate`", self.text)
+
+    def test_add_example_shows_free_text_options(self) -> None:
+        add_lines = [line for line in self.command_lines() if " add " in line]
+        for option in ("--context", "--related", "--blocked-by", "--tag"):
+            self.assertTrue(any(option in line for line in add_lines), option)
+
+    def test_skill_says_there_is_no_notes_option(self) -> None:
+        self.assertIn("no `--note` or `--notes` option", self.text)

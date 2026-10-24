@@ -10,6 +10,8 @@
 - [ ] **T022** Live-reload web board when TODO.md changes on disk #feature #web
   - Acceptance: An open web board reflects external TODO.md edits (CLI or editor) within a few seconds without a manual refresh, for both a single repository and the All board; auto-refresh does not discard an open modal or a half-filled form
   - Context: Decision: polling, no watchdog. Every request already re-reads TODO.md via TodoStore(...).snapshot() (src/bot_todo/web.py), so the server never serves stale data; only the browser needs telling. Add a small endpoint returning the TODO.md mtime(s) for the current selection (all configured repos for the All board); page JS polls it every few seconds and calls location.reload() when the value changes, skipping the reload while a modal or form is open. No new dependency, no long-lived connections.
+  - Related: Plan: .scratch/kanban-web-frontend/t022-live-reload-plan.md; ADR: docs/adr/0012-poll-a-board-version-token-for-live-reload.md
+  - Claimed: claude | 2026-10-23 | master
 
 ## Done (recent)
 

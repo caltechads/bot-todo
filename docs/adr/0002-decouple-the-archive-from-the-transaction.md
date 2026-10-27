@@ -34,10 +34,14 @@ append-only history.
   longer validated, and the archive heading no longer has to match the project.
 - The archive is never rewritten, never validated, and read only so `show` can
   display an archived task.
-- A closed task still named by an open task's `Blocked by` is retained in Done
-  past the twenty-entry limit. This keeps every blocker reference resolvable
-  from `TODO.md` alone, so blocker validation is unchanged and a cancelled
-  blocker still blocks.
+- A closed task still named by the `Blocked by` of any task that stays in
+  `TODO.md` — open, review, or closed — is retained in Done past the
+  twenty-entry limit, transitively. This keeps every blocker reference
+  resolvable from `TODO.md` alone, so blocker validation is unchanged and a
+  cancelled blocker still blocks. A chain of closed tasks retires together
+  once its newest dependent passes the limit. (Amended 2026-10-27, T023: the
+  original rule protected only blockers named by open tasks, so retiring a
+  blocker of a closed task in Done failed validation.)
 
 The format marker stays `todo-format: 1`. `TODO.md`'s bytes are unchanged, so
 existing repositories keep working with no migration and files written by this

@@ -5,15 +5,16 @@
 
 ## P1 — High Priority
 
-- [ ] **T023** Keep closed tasks archived together when a closed task in Done names another as a blocker #bug
-  - Acceptance: Done when completing or cancelling a task that pushes Done past its retention limit never archives a closed task that another task remaining in Done (open or closed) lists as a blocker, or archives the dependent with it, so the post-write validation no longer fails with 'references unknown blocker'; a regression test fills Done to the limit with a closed task blocked by an older closed task and completes one more task successfully.
-  - Context: Found in ledger (bot-todo 0.5.0): Done held 20 closed tasks; completing T023 retired the oldest, T004, while closed T001 (still in Done) has 'Blocked by: T004'. Retention only protects tasks named by open tasks' blockers, so the write failed with invalid_document 'T001 references unknown blocker T004'. validate passes before the mutation.
-  - Related: Plan: .scratch/done-retention/plan.md; ADR: docs/adr/0002-decouple-the-archive-from-the-transaction.md (amended)
-  - Review: 2026-10-27
-
 ## P2 — Backlog
 
 ## Done (recent)
+
+- [x] **T023** Keep closed tasks archived together when a closed task in Done names another as a blocker #bug
+  - Acceptance: Done when completing or cancelling a task that pushes Done past its retention limit never archives a closed task that another task remaining in Done (open or closed) lists as a blocker, or archives the dependent with it, so the post-write validation no longer fails with 'references unknown blocker'; a regression test fills Done to the limit with a closed task blocked by an older closed task and completes one more task successfully.
+  - Context: Found in ledger (bot-todo 0.5.0): Done held 20 closed tasks; completing T023 retired the oldest, T004, while closed T001 (still in Done) has 'Blocked by: T004'. Retention only protects tasks named by open tasks' blockers, so the write failed with invalid_document 'T001 references unknown blocker T004'. validate passes before the mutation.
+  - Related: Plan: .scratch/done-retention/plan.md; ADR: docs/adr/0002-decouple-the-archive-from-the-transaction.md (amended)
+  - Outcome: completed
+  - Closed: 2026-10-27
 
 - [x] **T022** Live-reload web board when TODO.md changes on disk #feature #web
   - Acceptance: An open web board reflects external TODO.md edits (CLI or editor) within a few seconds without a manual refresh, for both a single repository and the All board; auto-refresh does not discard an open modal or a half-filled form
@@ -134,11 +135,5 @@
   - Acceptance: --all answers list, critical, and actionable across the configured Repository Collection in priority, configuration, and file order with repository provenance, rejects every other command, and fails entirely with exit 3 when any repository fails
   - Context: .scratch/installable-bot-todo/phase-3-plan.md
   - Related: T003
-  - Outcome: completed
-  - Closed: 2026-08-12
-
-- [x] **T003** Complete the public single-repository bot-todo CLI #feature
-  - Acceptance: Every public command and selector accepts and rejects the documented shapes, single-repository human and JSON workflows pass end to end, configuration precedence and validation match the settled contract, and unsupported task-data and configuration schema versions fail before repository access or writes.
-  - Context: .scratch/installable-bot-todo/spec.md phase 2; .scratch/installable-bot-todo/phase-2-plan.md
   - Outcome: completed
   - Closed: 2026-08-12

@@ -11,3 +11,9 @@
   - Context: .scratch/installable-bot-todo/spec.md phase 1; docs/adr/0001, docs/adr/0002
   - Outcome: completed
   - Closed: 2026-08-11
+
+- [x] **T003** Complete the public single-repository bot-todo CLI #feature
+  - Acceptance: Every public command and selector accepts and rejects the documented shapes, single-repository human and JSON workflows pass end to end, configuration precedence and validation match the settled contract, and unsupported task-data and configuration schema versions fail before repository access or writes.
+  - Context: .scratch/installable-bot-todo/spec.md phase 2; .scratch/installable-bot-todo/phase-2-plan.md
+  - Outcome: completed
+  - Closed: 2026-08-12

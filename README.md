@@ -111,7 +111,7 @@ bot-todo [--json] [--config PATH] [--root PATH | --repo NAME | --all] COMMAND ..
 | `repos list` | List configured repositories |
 | `repos add [PATH]` | Add a repository entry; PATH defaults to `.` |
 | `repos remove TARGET` | Remove a repository entry by name or path |
-| `install-skill --target TARGET` | Install the bundled `todo` skill |
+| `install-skill --target TARGET` | Install the bundled `todo` skill; `TARGET` may be `all` |
 | `snippet` | Print the Task Management section for `AGENTS.md` or `CLAUDE.md` |
 
 Task IDs look like `T001` and are never reused. Types are `bug`, `chore`,
@@ -294,6 +294,17 @@ bot-todo install-skill --target claude
 bot-todo install-skill --target grok
 bot-todo install-skill --target codex
 ```
+
+Or install it for every target at once:
+
+```bash
+bot-todo install-skill --target all
+```
+
+`--target all` installs every target under its default skill root. It checks
+every target first; if any conflicts, it names them all and writes nothing.
+It rejects `--destination`. In JSON mode, `data.installations` lists one
+single-target result per target.
 
 Default skill roots:
 

@@ -1,4 +1,4 @@
-"""Install the packaged todo skill into one Skill Target's Skill Root."""
+"""Install the packaged todo skill into one or every Skill Target's Skill Root."""
 
 from __future__ import annotations
 
@@ -11,9 +11,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bot_todo import package_version
 from bot_todo.repository import TodoError
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 #: Package directory holding the canonical skill tree.
 ASSET_DIRECTORY = "skill_assets"
@@ -23,6 +27,8 @@ SKILL_DIRECTORY = "todo"
 MANIFEST_NAME = ".bot-todo-install.json"
 #: Manifest schema version this release writes and accepts.
 MANIFEST_SCHEMA_VERSION = 1
+#: ``--target`` choice that expands to every Skill Target.
+ALL_TARGETS = "all"
 #: Default Skill Root per Skill Target.
 TARGET_ROOTS = {
     "codex": "~/.agents/skills",
@@ -179,7 +185,7 @@ class SkillInstaller:
         """
         view = SkillAssets().view(self.target)
         root = self._root()
-        skill_path = root / SKILL_DIRECTORY
+        skill_path = self.skill_path()
         action = self._classify(skill_path, view)
         backup = None
         if not self.dry_run:
@@ -192,6 +198,36 @@ class SkillInstaller:
             dry_run=self.dry_run,
             backup_path=backup,
         )
+
+    def classify(self) -> str:
+        """
+        Decide the Reconciliation Action without touching the filesystem.
+
+        Side Effects:
+            Reads the packaged assets and the existing installed tree.
+
+        Returns:
+            One of ``install``, ``adopt``, ``update``, ``noop``, ``replace``.
+
+        Raises:
+            TodoError: If the Skill Root is unusable or an unforced conflict
+                exists.
+
+        """
+        return self._classify(self.skill_path(), SkillAssets().view(self.target))
+
+    def skill_path(self) -> Path:
+        """
+        Resolve the installed skill path without creating it.
+
+        Returns:
+            The ``todo`` directory under the resolved Skill Root.
+
+        Raises:
+            TodoError: If the Skill Root exists but is not a directory.
+
+        """
+        return self._root() / SKILL_DIRECTORY
 
     def _root(self) -> Path:
         """
@@ -535,3 +571,69 @@ class SkillInstaller:
             stream.write(self._manifest(view))
         os.chmod(temporary, 0o644)
         os.replace(temporary, skill_path / MANIFEST_NAME)
+
+
+class SkillTargetSetInstaller:
+    """
+    Install the packaged todo skill for several Skill Targets at once.
+
+    Every target is classified before any is committed, so an unforced
+    conflict in one target leaves every Skill Root untouched.
+
+    Args:
+        targets: Skill Targets to install, in installation order.
+
+    Keyword Args:
+        dry_run: Whether to classify without touching the filesystem.
+        force: Whether conflicts may be replaced from retained backups.
+
+    """
+
+    def __init__(self, targets: Sequence[str], *, dry_run: bool, force: bool) -> None:
+        """
+        Initialize an installer over every requested Skill Target.
+
+        Args:
+            targets: Skill Targets to install, in installation order.
+
+        Keyword Args:
+            dry_run: Whether to classify without touching the filesystem.
+            force: Whether conflicts may be replaced from retained backups.
+
+        """
+        #: One installer per Skill Target, in installation order.
+        self.installers = [
+            SkillInstaller(target, None, dry_run=dry_run, force=force)
+            for target in targets
+        ]
+
+    def run(self) -> list[InstallationResult]:
+        """
+        Classify every target, then perform each installation in order.
+
+        Side Effects:
+            Creates, updates, replaces, or backs up installed skill trees.
+
+        Returns:
+            One result per Skill Target, in installation order.
+
+        Raises:
+            TodoError: If any target conflicts without ``--force``, naming
+                every conflicting path, or if a Skill Root is unusable.
+
+        """
+        conflicts = []
+        for installer in self.installers:
+            try:
+                installer.classify()
+            except TodoError as error:
+                if error.code != "conflict":
+                    raise
+                conflicts.append(str(installer.skill_path()))
+        if conflicts:
+            raise TodoError(
+                "not clean managed todo skill installations: " + ", ".join(conflicts),
+                "conflict",
+                {"conflicts": conflicts},
+            )
+        return [installer.run() for installer in self.installers]

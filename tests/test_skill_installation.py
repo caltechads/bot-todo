@@ -487,5 +487,149 @@ class UsageTests(SkillInstallationTestCase):
                 self.assertFalse(self.root.exists())
 
 
+class AllTargetsTests(SkillInstallationTestCase):
+    """Install every Skill Target under its default root in one run."""
+
+    def setUp(self) -> None:
+        """
+        Point every default Skill Root into a disposable home directory.
+
+        Side Effects:
+            Creates a temporary directory and patches the home environment.
+        """
+        super().setUp()
+        self.home = self.base / "home"
+        self.home.mkdir()
+        environment = {"HOME": str(self.home), "USERPROFILE": str(self.home)}
+        patcher = mock.patch.dict(os.environ, environment)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def skill_path(self, target: str) -> Path:
+        """
+        Resolve one target's default installed skill path.
+
+        Args:
+            target: Skill Target to resolve.
+
+        Returns:
+            The target's ``todo`` directory under the disposable home.
+        """
+        return Path(TARGET_ROOTS[target].replace("~", str(self.home))) / "todo"
+
+    def run_all(self, *arguments: str) -> Any:
+        """
+        Run ``install-skill --target all`` in JSON mode.
+
+        Args:
+            *arguments: Extra ``install-skill`` options.
+
+        Returns:
+            The captured CLI result.
+        """
+        return invoke("--json", "install-skill", "--target", "all", *arguments)
+
+    def installations(self, *arguments: str) -> list[dict[str, Any]]:
+        """
+        Install every target successfully and return each installation.
+
+        Args:
+            *arguments: Extra ``install-skill`` options.
+
+        Returns:
+            The parsed ``data.installations`` list.
+        """
+        result = self.run_all(*arguments)
+        if result.returncode != 0:
+            raise AssertionError(f"install failed: {result.stderr}")
+        installations: list[dict[str, Any]] = json.loads(result.stdout)["data"][
+            "installations"
+        ]
+        return installations
+
+    def test_every_target_installs_under_its_default_root(self) -> None:
+        installations = self.installations()
+
+        self.assertEqual(
+            [item["target"] for item in installations], sorted(TARGET_ROOTS)
+        )
+        for item in installations:
+            with self.subTest(target=item["target"]):
+                path = self.skill_path(item["target"])
+                self.assertEqual(item["action"], "install")
+                self.assertEqual(item["skill_path"], str(path))
+                for name, data in self.view(item["target"]).items():
+                    self.assertEqual(path.joinpath(*name.split("/")).read_bytes(), data)
+
+    def test_a_second_run_is_a_noop_for_every_target(self) -> None:
+        self.installations()
+
+        installations = self.installations()
+
+        self.assertEqual({item["action"] for item in installations}, {"noop"})
+
+    def test_conflicts_are_all_reported_before_anything_is_written(self) -> None:
+        conflicting = ("claude", "grok")
+        for target in conflicting:
+            path = self.skill_path(target)
+            path.mkdir(parents=True)
+            (path / "SKILL.md").write_bytes(b"someone else's skill\n")
+        before = self.snapshot(self.home)
+
+        result = self.run_all()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        error = json.loads(result.stderr)["error"]
+        self.assertEqual(error["code"], "conflict")
+        self.assertEqual(
+            error["conflicts"], [str(self.skill_path(t)) for t in conflicting]
+        )
+        self.assertEqual(self.snapshot(self.home), before)
+        self.assertFalse(self.skill_path("codex").exists())
+
+    def test_force_replaces_a_conflict_and_installs_the_rest(self) -> None:
+        path = self.skill_path("claude")
+        path.mkdir(parents=True)
+        (path / "SKILL.md").write_bytes(b"edited\n")
+
+        installations = self.installations("--force")
+
+        actions = {item["target"]: item["action"] for item in installations}
+        self.assertEqual(
+            actions,
+            {
+                "claude": "replace",
+                "codex": "install",
+                "cursor": "install",
+                "grok": "install",
+            },
+        )
+        backup = Path(installations[0]["backup_path"])
+        self.assertEqual((backup / "SKILL.md").read_bytes(), b"edited\n")
+
+    def test_a_dry_run_creates_nothing(self) -> None:
+        installations = self.installations("--dry-run")
+
+        self.assertEqual(len(installations), len(TARGET_ROOTS))
+        self.assertTrue(all(item["dry_run"] for item in installations))
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_human_output_reports_one_line_per_target(self) -> None:
+        result = invoke("install-skill", "--target", "all", "--dry-run")
+
+        self.assertEqual(result.returncode, 0)
+        lines = result.stdout.splitlines()
+        self.assertEqual(len(lines), len(TARGET_ROOTS))
+        self.assertTrue(all(line.startswith("would install ") for line in lines))
+
+    def test_a_destination_is_a_usage_failure(self) -> None:
+        result = self.run_all("--destination", str(self.root))
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stderr)["error"]["code"], "usage")
+        self.assertFalse(self.root.exists())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,7 +26,13 @@ from bot_todo.repository import (
     TodoError,
     TodoStore,
 )
-from bot_todo.skill_installation import TARGET_ROOTS, SkillInstaller
+from bot_todo.skill_installation import (
+    ALL_TARGETS,
+    TARGET_ROOTS,
+    InstallationResult,
+    SkillInstaller,
+    SkillTargetSetInstaller,
+)
 from bot_todo.task_management_snippet import TaskManagementSnippet
 from bot_todo.web import run_web
 
@@ -1388,28 +1394,56 @@ class OutputWriter:
 
 def _install_skill(arguments: argparse.Namespace) -> CommandOutcome:
     """
-    Install the packaged todo skill for one Skill Target.
+    Install the packaged todo skill for one Skill Target or every Skill Target.
 
     Side Effects:
-        Creates, updates, replaces, or backs up an installed skill tree.
+        Creates, updates, replaces, or backs up installed skill trees.
 
     Args:
         arguments: Parsed ``install-skill`` options.
 
     Returns:
-        Machine-readable installation result and its human summary.
+        Machine-readable installation results and their human summary.
 
     Raises:
-        TodoError: If the Skill Root is unusable or an unforced conflict
-            exists.
+        TodoError: If ``--destination`` accompanies ``--target all``, a Skill
+            Root is unusable, or an unforced conflict exists.
 
     """
-    result = SkillInstaller(
-        arguments.target,
-        arguments.destination,
-        dry_run=arguments.dry_run,
-        force=arguments.force,
-    ).run()
+    if arguments.target != ALL_TARGETS:
+        return _installation_outcome(
+            SkillInstaller(
+                arguments.target,
+                arguments.destination,
+                dry_run=arguments.dry_run,
+                force=arguments.force,
+            ).run()
+        )
+    if arguments.destination is not None:
+        raise TodoError("--destination cannot be combined with --target all", "usage")
+    outcomes = [
+        _installation_outcome(result)
+        for result in SkillTargetSetInstaller(
+            sorted(TARGET_ROOTS), dry_run=arguments.dry_run, force=arguments.force
+        ).run()
+    ]
+    return CommandOutcome(
+        data={"installations": [outcome.data for outcome in outcomes]},
+        human="\n".join(outcome.human for outcome in outcomes),
+    )
+
+
+def _installation_outcome(result: InstallationResult) -> CommandOutcome:
+    """
+    Render one Skill Target's installation result.
+
+    Args:
+        result: Classified and performed installation.
+
+    Returns:
+        Machine-readable installation result and its human summary.
+
+    """
     data = {
         "target": result.target,
         "skill_root": str(result.skill_root),
@@ -1593,7 +1627,9 @@ def _build_parser() -> argparse.ArgumentParser:
     install = commands.add_parser(
         "install-skill", help="install the bundled todo skill"
     )
-    install.add_argument("--target", choices=sorted(TARGET_ROOTS), required=True)
+    install.add_argument(
+        "--target", choices=[*sorted(TARGET_ROOTS), ALL_TARGETS], required=True
+    )
     install.add_argument("--destination", type=Path, help="skill root override")
     install.add_argument("--dry-run", action="store_true")
     install.add_argument("--force", action="store_true")

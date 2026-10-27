@@ -168,6 +168,58 @@ class ArchiveTests(TodoCliTestCase):
         self.assertIn(f"**{blocker_id}**", todo)
         self.assertEqual(self.run_cli("validate").stdout.strip(), "valid")
 
+    def add_blocked(self, title: str, blocker_id: str) -> str:
+        """
+        Add a simple chore blocked by another task and return its ID.
+
+        Args:
+            title: Task title.
+            blocker_id: ID of the blocking task.
+
+        Returns:
+            The allocated task ID.
+        """
+        return self.added_id(
+            title, "--type", "chore", "--simple", "--blocked-by", blocker_id
+        )
+
+    def test_a_blocker_named_by_a_closed_task_is_retained_in_done(self) -> None:
+        blocker_id = self.add_simple("Blocker")
+        dependent_id = self.add_blocked("Dependent", blocker_id)
+        self.run_cli("complete", blocker_id)
+        self.run_cli("complete", dependent_id)
+        for number in range(18):
+            self.run_cli("complete", self.add_simple(f"Task {number:02d}"))
+
+        self.run_cli("complete", self.add_simple("One more"))
+
+        self.assertIn(f"**{blocker_id}**", (self.root / "TODO.md").read_text())
+        self.assertEqual(self.run_cli("validate").stdout.strip(), "valid")
+
+    def test_a_closed_blocker_chain_retires_together(self) -> None:
+        first = self.add_simple("First")
+        second = self.add_blocked("Second", first)
+        third = self.add_blocked("Third", second)
+        for task_id in (first, second, third):
+            self.run_cli("complete", task_id)
+        for number in range(19):
+            self.run_cli("complete", self.add_simple(f"Task {number:02d}"))
+
+        todo = (self.root / "TODO.md").read_text()
+        self.assertIn(f"**{first}**", todo)
+        self.assertIn(f"**{second}**", todo)
+        self.assertEqual(self.run_cli("validate").stdout.strip(), "valid")
+
+        for number in range(2):
+            self.run_cli("complete", self.add_simple(f"Late {number}"))
+
+        todo = (self.root / "TODO.md").read_text()
+        archive = (self.root / "TODO.archive.md").read_text()
+        for task_id in (first, second, third):
+            self.assertNotIn(f"**{task_id}**", todo)
+            self.assertIn(f"**{task_id}**", archive)
+        self.assertEqual(self.run_cli("validate").stdout.strip(), "valid")
+
     def test_a_cancelled_blocker_keeps_blocking_after_overflow(self) -> None:
         blocker_id = self.add_simple("Blocker", "P1")
         dependent_id = self.added_id(

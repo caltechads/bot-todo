@@ -116,9 +116,9 @@ Kanban Board is read-only. No mutation accepts `--all`.
 
 Completion and cancellation retain the ID and move the task to Done. The CLI
 keeps the newest 20 closed tasks there and retires older entries to the archive,
-except a closed task still named by an open task's blockers, which stays in Done
-until nothing depends on it. Cancellation does not satisfy dependents
-automatically.
+except a closed task still named as a blocker by any task that stays in
+`TODO.md`, which stays in Done until nothing depends on it. Cancellation does
+not satisfy dependents automatically.
 
 After a mutation, run `validate` again. The CLI validates before and after each
 write, serializes concurrent access per repository, and replaces `TODO.md`

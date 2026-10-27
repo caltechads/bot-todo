@@ -1455,9 +1455,11 @@ def _archive_overflow(document: TodoDocument) -> list[Task]:
     """
     Remove Done entries beyond the retention limit.
 
-    A closed task still named by an open task's blockers is retained past the
-    limit, so every blocker reference stays resolvable from the active file
-    alone and a cancelled blocker keeps blocking.
+    A closed task still named as a blocker by any task that stays in the active
+    file is retained past the limit, transitively, so every blocker reference
+    stays resolvable from the active file alone and a cancelled blocker keeps
+    blocking. A chain of closed blockers retires together once its newest
+    dependent passes the limit.
 
     Args:
         document: Document to mutate.
@@ -1466,18 +1468,23 @@ def _archive_overflow(document: TodoDocument) -> list[Task]:
         Tasks removed from Done, in retirement order.
 
     """
-    referenced = {
-        blocker
-        for task in document.tasks
-        if task.priority is not None
-        for blocker in _blockers(task)
-    }
+    kept = document.done[:DONE_LIMIT]
     overflow = document.done[DONE_LIMIT:]
-    retired = [task for task in overflow if task.task_id not in referenced]
-    document.done = document.done[:DONE_LIMIT] + [
-        task for task in overflow if task.task_id in referenced
-    ]
-    return retired
+    staying = [task for task in document.tasks if task.priority is not None] + kept
+    retained: set[str] = set()
+    while True:
+        referenced = {blocker for task in staying for blocker in _blockers(task)}
+        newly = [
+            task
+            for task in overflow
+            if task.task_id in referenced and task.task_id not in retained
+        ]
+        if not newly:
+            break
+        retained.update(task.task_id for task in newly)
+        staying.extend(newly)
+    document.done = kept + [task for task in overflow if task.task_id in retained]
+    return [task for task in overflow if task.task_id not in retained]
 
 
 def _format_id(number: int) -> str:

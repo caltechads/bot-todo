@@ -9,7 +9,7 @@
   - Acceptance: Done when completing or cancelling a task that pushes Done past its retention limit never archives a closed task that another task remaining in Done (open or closed) lists as a blocker, or archives the dependent with it, so the post-write validation no longer fails with 'references unknown blocker'; a regression test fills Done to the limit with a closed task blocked by an older closed task and completes one more task successfully.
   - Context: Found in ledger (bot-todo 0.5.0): Done held 20 closed tasks; completing T023 retired the oldest, T004, while closed T001 (still in Done) has 'Blocked by: T004'. Retention only protects tasks named by open tasks' blockers, so the write failed with invalid_document 'T001 references unknown blocker T004'. validate passes before the mutation.
   - Related: Plan: .scratch/done-retention/plan.md; ADR: docs/adr/0002-decouple-the-archive-from-the-transaction.md (amended)
-  - Claimed: claude | 2026-10-27 | master
+  - Review: 2026-10-27
 
 ## P2 — Backlog
 

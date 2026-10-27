@@ -1,11 +1,16 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 24 -->
+<!-- todo-format: 2; next-id: 25 -->
 
 ## P0 — Critical / Blocking
 
 ## P1 — High Priority
 
 ## P2 — Backlog
+
+- [ ] **T024** Install the todo skill for every Skill Target in one install-skill run #feature #skill
+  - Acceptance: install-skill --target all installs every Skill Target in sorted order; any conflict (without --force) is reported for all targets before anything is written; --destination with all is a usage error; --dry-run/--force apply per target; single-target JSON unchanged, all returns data.installations; README and tests updated
+  - Context: Grilled 2026-10-27: chose --target all over a subcommand --all to avoid overloading the Repository Collection --all selector. Plan: .scratch/install-all-skill-targets/plan.md. ADR: docs/adr/0013-select-every-skill-target-with-target-all.md
+  - Claimed: claude | 2026-10-27 | master
 
 ## Done (recent)
 

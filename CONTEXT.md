@@ -80,7 +80,7 @@ _Avoid_: Critical task
 
 **Skill Target**:
 One supported agent tool selected for a `todo` skill installation: Codex,
-Claude, Cursor, or Grok.
+Claude, Cursor, or Grok. `all` selects every Skill Target; it is not itself one.
 _Avoid_: Agent, platform
 
 **Skill Root**:

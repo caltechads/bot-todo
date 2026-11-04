@@ -9,7 +9,8 @@
 
 - [ ] **T025** Reload the Repository Collection so newly added repos appear in the running web app #feature #web
   - Acceptance: With 'bot-todo web' running, 'bot-todo repos add' and 'repos remove' change the board's selector and the All board on the next page load, without a restart. A launch repo that is added later appears once, under its Repository Name, not also as Current. A launch repo that is removed stays reachable at bare / as Current. A malformed config makes that request fail with the configuration error. Covered by tests.
-  - Context: Design: docs/adr/0014-read-the-repository-collection-per-web-request.md (amends ADR 0011). Today KanbanWebApp (src/bot_todo/web.py) keeps a process-lifetime RepositoryCollection and default_selection from startup (cli.py web command). Per ADR 0014: each request reads its own snapshot via CollectionStore.load (shared lock); _launch_selection runs per request against that snapshot; /board-version uses the request snapshot and does not watch config.toml.
+  - Context: Design: docs/adr/0014-read-the-repository-collection-per-web-request.md (amends ADR 0011). Plan: .scratch/kanban-web-frontend/t025-per-request-collection-plan.md. Today KanbanWebApp (src/bot_todo/web.py) keeps a process-lifetime RepositoryCollection and default_selection from startup (cli.py web command). Per ADR 0014: each request reads its own snapshot via CollectionStore.load (shared lock); _launch_selection runs per request against that snapshot; /board-version uses the request snapshot and does not watch config.toml.
+  - Claimed: claude | 2026-11-03 | t025-per-request-collection
 
 ## Done (recent)
 

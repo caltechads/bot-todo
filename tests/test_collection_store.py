@@ -106,6 +106,17 @@ class MissingFileTests(CollectionStoreTestCase):
         self.assertEqual(caught.exception.code, "config_not_found")
         self.assertFalse(missing.exists())
 
+    def test_an_unstattable_file_is_an_io_error(self) -> None:
+        # Python < 3.14 raises EACCES from Path.is_file instead of returning False.
+        denied = PermissionError(13, "Permission denied")
+        with (
+            mock.patch.object(Path, "is_file", side_effect=denied),
+            self.assertRaises(TodoError) as caught,
+        ):
+            CollectionStore(self.directory / "config.toml").load()
+
+        self.assertEqual(caught.exception.code, "io_error")
+
     def test_add_creates_the_default_file_and_parents(self) -> None:
         repo = self.add_repo("sample-repo")
 

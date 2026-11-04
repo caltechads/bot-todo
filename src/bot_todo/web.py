@@ -1514,7 +1514,8 @@ def run_web(
     """Serve the Kanban Board until interrupted.
 
     Side Effects:
-        Will bind a loopback socket and may open the default browser.
+        Reads the configuration, binds a loopback socket, and may open the
+        default browser.
 
     Args:
         store: Launch Task Repository, or ``None`` when All is selected.

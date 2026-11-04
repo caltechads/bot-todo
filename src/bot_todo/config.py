@@ -369,11 +369,16 @@ class CollectionStore:
             Validated Repository Collection.
 
         Raises:
-            TodoError: If the configuration is missing, malformed, or declares
-                an unsupported schema version.
+            TodoError: If the configuration is missing, unreadable, malformed,
+                or declares an unsupported schema version.
 
         """
-        if not self.path.is_file():
+        try:
+            # Python < 3.14 raises EACCES here instead of returning False.
+            exists = self.path.is_file()
+        except OSError as error:
+            raise TodoError(f"cannot read {self.path}: {error}", "io_error") from error
+        if not exists:
             return self._read()
         with self._lock.shared():
             return self._read()

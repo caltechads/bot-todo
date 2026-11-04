@@ -43,30 +43,31 @@
   - `BoardSelection(key: str, name: str | None, store: TodoStore | None, collection: RepositoryCollection)` — new last field `collection`, `#: Repository Collection snapshot this request resolved against.`
   - `KanbanWebApp(store: TodoStore | None, collections: CollectionStore, csrf_token: str | None = None)`; attribute `collections` replaces `collection`; `default_selection` is removed.
   - `KanbanWebApp.launch_selection(collection: RepositoryCollection) -> BoardSelection` (renamed public from `_launch_selection`; same rules, result carries `collection`).
-  - `KanbanWebApp.resolve_selection(query: str, collection: RepositoryCollection) -> BoardSelection | None` — empty query → `launch_selection(collection)`; `repo=current` → that only if its key is `"current"`; named entry looked up in `collection`.
+  - `KanbanWebApp.resolve_selection(query: str, collection: RepositoryCollection) -> BoardSelection | None` — empty query → `launch_selection(collection)`; `repo=all` → `BoardSelection("all", None, None, collection)`; `repo=current` → the launch selection only if its key is `"current"`; named entry looked up in `collection`. **Every** returned selection carries `collection`, and so do the path-only `BoardSelection(...)` values `_render_repository_menu` builds (pass `selection.collection`).
   - `render_not_found(selection=None)`, `render_error(title, message, selection=None)`, `_send_todo_error(error, selection=None)`, `_page(..., selection: BoardSelection | None)`: `None` now means **no snapshot** — the page renders the navbar without the repository menu, and the return link is bare `/` (which always resolves to the launch board once the config is good). Used by every rejection before the load (host, Origin, media type, body, CSRF) and by the config-error page. Never fabricate a launch selection from an empty collection: it would label a configured launch repo as Current and link to `/?repo=current`, which 404s.
   - `run_web(store, *, collections: CollectionStore, port: int, open_browser: bool)`.
   - Test helper in `tests/test_web.py`: `write_collection(path: Path, *entries: RepositoryEntry) -> CollectionStore` — writes `schema_version = 1` plus one `[[repositories]]` table per entry (quote values with `json.dumps`), returns `CollectionStore(path)`.
 
 - [ ] **Step 1: Migrate existing web tests to the new constructor**
 
-Replace every `KanbanWebApp(..., RepositoryCollection(...), ...)` (lines 33, 141, 158, 217, 1452, 1587, 1628, 1662) with `write_collection(<tmp>/"config.toml", *entries)`; `run_web(... collection=...)` at 1078 becomes `collections=write_collection(...)`. Direct calls at 143-174 become `app.resolve_selection(q, app.collections.load())`. Put each config file in a temp dir the test already owns (e.g. `self.root / "config.toml"`).
+Replace every `KanbanWebApp(..., RepositoryCollection(...), ...)` (lines 33, 141, 158, 217, 1452, 1587, 1628, 1662) with `write_collection(<tmp>/"config.toml", *entries)`; `run_web(... collection=...)` at 1078 becomes `collections=write_collection(...)`. Direct calls at 143-174 become `app.resolve_selection(q, app.collections.load())`. Put each config file in a temp dir the test already owns. In `KanbanWebTests.setUp`, keep the store on the test — `self.collections = write_collection(self.root / "config.toml")` — and pass **that object** to `KanbanWebApp`, so tests mutate the store the running server reads.
 
-- [ ] **Step 2: Write the failing acceptance tests** (in `KanbanWebTests`, real server, explicit config at `self.root.parent / f"{self.root.name}-config.toml"` or a new temp dir)
+- [ ] **Step 2: Write the failing acceptance tests** in `KanbanWebTests` against the `setUp` server and `self.collections`. Add a helper `_beta(self) -> Path` that creates `self.root / "beta"`, runs `TodoStore(beta).initialize("Beta")`, adds simple chore `"Beta only work"`, and returns the path (an uninitialized entry would fail the whole All board). `self.root` is already resolved, so `self.collections.add(str(self.root), "alpha")` matches `self.store.root`. `ADD = {"title": "Never written", "priority": "P2", "task_type": "chore", "simple": "on"}`.
 
 ```python
 def test_repos_add_appears_on_next_load_without_restart(self):
-    # server started with empty config; beta has task "Beta only work"
+    beta = self._beta()                     # server started with empty config
     _, _, before = self.get("/")
     self.assertNotIn("/?repo=beta", before)
-    self.collections.add(str(beta_root), "beta")
+    self.collections.add(str(beta), "beta")
     status, _, after = self.get("/")
     self.assertIn("/?repo=beta", after)
     self.assertEqual(self.get("/?repo=beta")[0], 200)
     self.assertIn("Beta only work", self.get("/?repo=all")[2])
 
 def test_repos_remove_disappears_on_next_load(self):
-    # config starts with beta; remove it
+    self.collections.add(str(self._beta()), "beta")
+    self.assertIn("Beta only work", self.get("/?repo=all")[2])
     self.collections.remove("beta")
     self.assertNotIn("/?repo=beta", self.get("/")[2])
     self.assertEqual(self.get("/?repo=beta")[0], 404)
@@ -80,7 +81,8 @@ def test_launch_repo_added_later_appears_once_by_name(self):
     self.assertEqual(self.get("/?repo=current")[0], 404)
 
 def test_launch_repo_removed_stays_reachable_as_current(self):
-    # config starts with launch root as "alpha"
+    self.collections.add(str(self.root), "alpha")
+    self.assertNotIn(">Current<", self.get("/")[2])
     self.collections.remove("alpha")
     status, _, body = self.get("/")
     self.assertEqual(status, 200)
@@ -89,32 +91,53 @@ def test_launch_repo_removed_stays_reachable_as_current(self):
     self.assertEqual(self.get("/?repo=alpha")[0], 404)
 
 def test_malformed_config_fails_the_request_with_the_config_error(self):
-    config.write_text("this is not toml = [\n")
+    config = self.collections.path
+    before = self.store.todo_path.read_bytes()
+    config.write_text("this is not toml = [\n", encoding="utf-8")
     status, _, body = self.get("/")
     self.assertEqual(status, 500)
     self.assertIn("is not valid TOML", body)
-    self.assertNotEqual(self.get("/board-version")[0], 200)      # Review Focus 1
-    # Review Focus 2: POST add with valid CSRF → 500, TODO.md bytes unchanged
     self.assertIn('href="/"', body)                              # Review Focus 4
     self.assertNotIn("/?repo=current", body)
+    self.assertNotEqual(self.get("/board-version")[0], 200)      # Review Focus 1
+    status, _, body = self.post("/tasks", ADD)                   # Review Focus 2
+    self.assertEqual(status, 500)
+    self.assertIn("is not valid TOML", body)
+    self.assertEqual(self.store.todo_path.read_bytes(), before)
     config.unlink()
     self.assertIn("configuration file not found", self.get("/")[2])
     write_collection(config)                                      # repaired
     self.assertEqual(self.get("/")[0], 200)
 
 def test_post_to_removed_repository_is_not_found(self):          # Review Focus 3
-    # config has beta; remove; POST /tasks?repo=beta → 404; beta TODO.md unchanged
+    beta = self._beta()
+    self.collections.add(str(beta), "beta")
+    before = (beta / "TODO.md").read_bytes()
+    self.collections.remove("beta")
+    status, _, _ = self.post("/tasks?repo=beta", ADD)
+    self.assertEqual(status, 404)
+    self.assertEqual((beta / "TODO.md").read_bytes(), before)
 
 def test_pre_load_rejection_links_to_bare_root(self):            # Review Focus 4
-    # config has launch root as "alpha"; POST /tasks with Origin ok, _csrf=wrong
-    # → 403, body has href="/" and no "/?repo=current"
+    self.collections.add(str(self.root), "alpha")
+    body = urlencode({"_csrf": "wrong", **ADD})
+    status, _, page = self.request("POST", "/tasks", body, {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Origin": self.app.origin,
+    })
+    self.assertEqual(status, 403)
+    self.assertIn('href="/"', page)
+    self.assertNotIn("/?repo=current", page)
 
 def test_untrusted_host_never_reads_the_config(self):            # Review Focus 5
-    # config has beta, then made malformed; GET with Host: evil.example → 403
-    # body has no "beta"
+    self.collections.add(str(self._beta()), "beta")
+    self.collections.path.write_text("this is not toml = [\n", encoding="utf-8")
+    status, _, page = self.request("GET", "/", headers={"Host": "evil.example"})
+    self.assertEqual(status, 403)
+    self.assertNotIn("beta", page)
 ```
 
-Use `CollectionStore.add(path: str, name: str | None)` / `.remove(name: str)` for mutations (same code path as `bot-todo repos`). In `CollectionKanbanWebTests`, add: after `self.app.collections.add(gamma, "gamma")`, `GET /board-version?repo=all` token differs from before.
+Use `CollectionStore.add(path: str, name: str | None)` / `.remove(name: str)` for mutations (same code path as `bot-todo repos`). In `CollectionKanbanWebTests`, add `test_collection_change_moves_only_the_all_token`: record `/board-version?repo=all` and `/board-version?repo=alpha.one`; `self.app.collections.add(str(gamma), "gamma")` with an initialized `gamma`; assert the All token changed **and** the `alpha.one` token is identical (catches `/board-version` starting to hash `config.toml`, which ADR 0014 excludes).
 
 - [ ] **Step 3: Run tests to verify they fail**
 
@@ -132,7 +155,7 @@ Expected: new tests FAIL (menu still shows startup snapshot / malformed config s
 
 - [ ] **Step 5: Wire the CLI** in `src/bot_todo/cli.py` web branch
 
-Keep `collection = selector.collection()` (startup `--repo` resolution and fail-before-bind), and call `run_web(store, collections=CollectionStore(selector.explicit_path()), port=..., open_browser=...)`. Update the five `test_cli.py` web tests to assert `run_web.call_args.kwargs["collections"].path` equals the resolved config path (explicit `config.resolve()`, or `RepositoryCollection.default_path().resolve()` for the default case) instead of inspecting entries; `test_explicit_web_configuration_fails_before_the_server_binds` stays as is.
+Keep `collection = selector.collection()` (startup `--repo` resolution and fail-before-bind), and call `run_web(store, collections=CollectionStore(selector.explicit_path()), port=..., open_browser=...)`. Update the five `test_cli.py` web tests instead of inspecting entries. The three `--config` tests assert `run_web.call_args.kwargs["collections"].path == config.resolve()`. The two default-config tests (`test_all_web_with_missing_default_config_passes_an_empty_collection`, `test_web_selects_one_repository_and_passes_launch_options`) assert `collections.explicit is False` and `len(collections.load()) == 0`. A path check alone would pass `CollectionStore(default_path())`, which is explicit and fails every request when the default file is absent; `test_explicit_web_configuration_fails_before_the_server_binds` stays as is.
 
 - [ ] **Step 6: Run tests to verify they pass**
 

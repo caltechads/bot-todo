@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 26 -->
+<!-- todo-format: 2; next-id: 28 -->
 
 ## P0 — Critical / Blocking
 
@@ -7,12 +7,22 @@
 
 ## P2 — Backlog
 
-- [ ] **T025** Reload the Repository Collection so newly added repos appear in the running web app #feature #web
-  - Acceptance: With 'bot-todo web' running, 'bot-todo repos add' and 'repos remove' change the board's selector and the All board on the next page load, without a restart. A launch repo that is added later appears once, under its Repository Name, not also as Current. A launch repo that is removed stays reachable at bare / as Current. A malformed config makes that request fail with the configuration error. Covered by tests.
-  - Context: Design: docs/adr/0014-read-the-repository-collection-per-web-request.md (amends ADR 0011). Plan: .scratch/kanban-web-frontend/t025-per-request-collection-plan.md. Today KanbanWebApp (src/bot_todo/web.py) keeps a process-lifetime RepositoryCollection and default_selection from startup (cli.py web command). Per ADR 0014: each request reads its own snapshot via CollectionStore.load (shared lock); _launch_selection runs per request against that snapshot; /board-version uses the request snapshot and does not watch config.toml.
-  - Review: 2026-11-03
+- [ ] **T026** Sort the web board repository menu alphabetically, with All pinned first #feature #web
+  - Acceptance: The repository dropdown lists All first, then a Tabler dropdown-divider, then configured repositories sorted case-insensitively by name; the Current entry (when shown) stays after the sorted list; a test covers the ordering and divider.
+  - Context: Menu is rendered by _render_repository_menu in src/bot_todo/web.py (~line 1136), which currently emits entries in Repository Collection order. Use Tabler/Bootstrap's native <div class="dropdown-divider"></div> for the separator; no custom CSS needed. Open question: whether Current should also get its own divider.
+
+- [ ] **T027** Refresh the board's repository selector live when the Repository Collection changes #feature #web
+  - Acceptance: With 'bot-todo web' running and a single-repository board open, 'bot-todo repos add' or 'repos remove' makes the open page reload by itself so the selector shows the change, with no manual reload. The /board-version token includes the request snapshot's repository names and paths (not config.toml mtime). A config change that leaves names and paths unchanged causes no reload. Covered by tests.
+  - Context: Follow-up to T025, which met its spec (changes appear on next page load). ADR 0014 (docs/adr/0014-read-the-repository-collection-per-web-request.md) deferred 'Add the configuration file to the /board-version token' until users expect open single-repository boards to refresh the selector by themselves; that is now the case. Amend or supersede ADR 0014's /board-version decision.
+  - Related: T025
 
 ## Done (recent)
+
+- [x] **T025** Reload the Repository Collection so newly added repos appear in the running web app #feature #web
+  - Acceptance: With 'bot-todo web' running, 'bot-todo repos add' and 'repos remove' change the board's selector and the All board on the next page load, without a restart. A launch repo that is added later appears once, under its Repository Name, not also as Current. A launch repo that is removed stays reachable at bare / as Current. A malformed config makes that request fail with the configuration error. Covered by tests.
+  - Context: Design: docs/adr/0014-read-the-repository-collection-per-web-request.md (amends ADR 0011). Plan: .scratch/kanban-web-frontend/t025-per-request-collection-plan.md. Today KanbanWebApp (src/bot_todo/web.py) keeps a process-lifetime RepositoryCollection and default_selection from startup (cli.py web command). Per ADR 0014: each request reads its own snapshot via CollectionStore.load (shared lock); _launch_selection runs per request against that snapshot; /board-version uses the request snapshot and does not watch config.toml.
+  - Outcome: completed
+  - Closed: 2026-11-03
 
 - [x] **T024** Install the todo skill for every Skill Target in one install-skill run #feature #skill
   - Acceptance: install-skill --target all installs every Skill Target in sorted order; any conflict (without --force) is reported for all targets before anything is written; --destination with all is a usage error; --dry-run/--force apply per target; single-target JSON unchanged, all returns data.installations; README and tests updated
@@ -135,9 +145,3 @@
   - Context: config.py only loads and validates the collection today; every change means editing the TOML by hand. Spec: .scratch/repos-cli/spec.md. Plan: .scratch/repos-cli/plan.md
   - Outcome: completed
   - Closed: 2026-08-14
-
-- [x] **T005** Bundle and install the todo skill (Phase 4) #feature
-  - Acceptance: install-skill installs the packaged todo skill for codex/claude/cursor/grok with manifests, conflict detection, dry-run, and forced replacement; skill assets ship in wheel and sdist; root skills/ tree removed
-  - Context: .scratch/installable-bot-todo/phase-4-plan.md
-  - Outcome: completed
-  - Closed: 2026-08-12

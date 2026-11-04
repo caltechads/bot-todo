@@ -24,3 +24,9 @@
   - Related: T003
   - Outcome: completed
   - Closed: 2026-08-12
+
+- [x] **T005** Bundle and install the todo skill (Phase 4) #feature
+  - Acceptance: install-skill installs the packaged todo skill for codex/claude/cursor/grok with manifests, conflict detection, dry-run, and forced replacement; skill assets ship in wheel and sdist; root skills/ tree removed
+  - Context: .scratch/installable-bot-todo/phase-4-plan.md
+  - Outcome: completed
+  - Closed: 2026-08-12

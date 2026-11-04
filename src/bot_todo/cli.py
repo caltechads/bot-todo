@@ -1687,7 +1687,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 store = selector.select(arguments.command).store
             run_web(
                 store,
-                collection=collection,
+                collections=CollectionStore(selector.explicit_path()),
                 port=arguments.port,
                 open_browser=not arguments.no_open,
             )

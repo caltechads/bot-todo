@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
-from bot_todo.config import RepositoryCollection
+from bot_todo.config import CollectionStore, RepositoryCollection
 from bot_todo.repository import (
     PRIORITY_HEADINGS,
     SIMPLE_TAG,
@@ -80,6 +80,8 @@ class BoardSelection:
         key: Query value identifying All, Current, or a Repository Entry.
         name: Configured Repository Name, or ``None`` for All and Current.
         store: Selected Task Repository, or ``None`` for All.
+        collection: Repository Collection snapshot this request resolved
+            against.
     """
 
     #: Query value identifying the selection.
@@ -88,6 +90,8 @@ class BoardSelection:
     name: str | None
     #: Selected Task Repository; ``None`` means All.
     store: TodoStore | None
+    #: Repository Collection snapshot this request resolved against.
+    collection: RepositoryCollection
 
 
 @dataclass(frozen=True)
@@ -108,68 +112,69 @@ class BoardTask:
 class KanbanWebApp:
     """Render a Kanban Board over a launch repository and collection.
 
+    Each request reads its own Repository Collection snapshot from
+    ``collections`` (ADR 0014); the app keeps no process-lifetime collection.
+
     Args:
         store: Launch Task Repository, or ``None`` when the launch selection
             is All.
-        collection: Immutable Repository Collection loaded before bind.
+        collections: Configuration store read once per request.
         csrf_token: Token override used by deterministic tests.
     """
 
     def __init__(
         self,
         store: TodoStore | None,
-        collection: RepositoryCollection,
+        collections: CollectionStore,
         csrf_token: str | None = None,
     ) -> None:
-        """Initialize a board over one launch selection and collection.
+        """Initialize a board over one launch repository and configuration.
 
         Args:
             store: Launch Task Repository, or ``None`` when All is selected.
-            collection: Immutable Repository Collection loaded before bind.
+            collections: Configuration store read once per request.
             csrf_token: Token override used by deterministic tests.
         """
         #: Launch Task Repository, or ``None`` when All is selected.
         self.store = store
-        #: Immutable Repository Collection loaded before the server binds.
-        self.collection = collection
+        #: Configuration store each request loads its snapshot from.
+        self.collections = collections
         #: Secret required by every state-changing form.
         self.csrf_token = csrf_token or secrets.token_urlsafe(32)
         #: Exact origin assigned after the loopback socket binds.
         self.origin = ""
-        #: Launch selection used for bare ``/`` and unmatched Current.
-        self.default_selection = self._launch_selection(store, collection)
 
-    def _launch_selection(
-        self, store: TodoStore | None, collection: RepositoryCollection
-    ) -> BoardSelection:
-        """Derive the immutable launch selection from constructor facts.
+    def launch_selection(self, collection: RepositoryCollection) -> BoardSelection:
+        """Label the launch repository against one request's snapshot.
 
         Args:
-            store: Launch Task Repository, or ``None`` for All.
-            collection: Immutable Repository Collection loaded before bind.
+            collection: Repository Collection snapshot for this request.
 
         Returns:
             All, a matching configured entry, or Current for an unmatched path.
         """
-        if store is None:
-            return BoardSelection("all", None, None)
+        if self.store is None:
+            return BoardSelection("all", None, None, collection)
         for entry in collection:
-            if entry.path == store.root:
-                return BoardSelection(entry.name, entry.name, store)
-        return BoardSelection("current", None, store)
+            if entry.path == self.store.root:
+                return BoardSelection(entry.name, entry.name, self.store, collection)
+        return BoardSelection("current", None, self.store, collection)
 
-    def resolve_selection(self, query: str) -> BoardSelection | None:
+    def resolve_selection(
+        self, query: str, collection: RepositoryCollection
+    ) -> BoardSelection | None:
         """Resolve one request's ``repo`` query.
 
         Args:
             query: Raw query string from ``urlsplit(self.path).query``.
+            collection: Repository Collection snapshot for this request.
 
         Returns:
             The launch selection when ``query`` is empty, a concrete selection
             for one valid ``repo`` value, or ``None`` for any invalid query.
         """
         if query == "":
-            return self.default_selection
+            return self.launch_selection(collection)
         try:
             parsed = parse_qs(
                 query,
@@ -184,18 +189,19 @@ class KanbanWebApp:
             return None
         key = values[0]
         if key == "all":
-            return BoardSelection("all", None, None)
+            return BoardSelection("all", None, None, collection)
         if key == "current":
-            if self.default_selection.key != "current":
-                return None
-            return self.default_selection
+            launch = self.launch_selection(collection)
+            return launch if launch.key == "current" else None
         if not key:
             return None
         try:
-            entry = self.collection.entry(key)
+            entry = collection.entry(key)
         except TodoError:
             return None
-        return BoardSelection(entry.name, entry.name, TodoStore(entry.path))
+        return BoardSelection(
+            entry.name, entry.name, TodoStore(entry.path), collection
+        )
 
     def selection_path(self, selection: BoardSelection) -> str:
         """Build the canonical path for one board selection.
@@ -263,11 +269,16 @@ class KanbanWebApp:
         encoded_name = row.repository_name.encode("utf-8").hex()
         return f"task-{encoded_name}-{row.task.task_id}-modal"
 
-    def _collection_columns(self) -> tuple[tuple[str, list[BoardTask]], ...]:
+    def _collection_columns(
+        self, collection: RepositoryCollection
+    ) -> tuple[tuple[str, list[BoardTask]], ...]:
         """Project every configured repository onto the four board columns.
 
         Side Effects:
             Reads every configured Task Repository.
+
+        Args:
+            collection: Repository Collection snapshot for this request.
 
         Returns:
             Open, Review, Completed, and Cancelled rows in board order.
@@ -279,7 +290,7 @@ class KanbanWebApp:
         # when a third collection consumer needs the same contract.
         snapshots: list[tuple[str, Any]] = []
         failures: list[dict[str, str]] = []
-        for entry in self.collection:
+        for entry in collection:
             try:
                 snapshot = TodoStore(entry.path).snapshot()
             except (TodoError, OSError) as error:
@@ -298,7 +309,7 @@ class KanbanWebApp:
         if failures:
             named = ", ".join(f"{one['name']} ({one['code']})" for one in failures)
             raise TodoError(
-                f"{len(failures)} of {len(self.collection)} repositories failed: "
+                f"{len(failures)} of {len(collection)} repositories failed: "
                 f"{named}",
                 "aggregate_partial_failure",
                 {"failures": failures},
@@ -345,7 +356,7 @@ class KanbanWebApp:
         if selection.store is not None:
             paths = [selection.store.todo_path]
         else:
-            paths = [entry.path / TODO_FILENAME for entry in self.collection]
+            paths = [entry.path / TODO_FILENAME for entry in selection.collection]
         digest = hashlib.sha256()
         for path in paths:
             try:
@@ -374,7 +385,7 @@ class KanbanWebApp:
         version_url = f"/board-version?{urlencode({'repo': selection.key})}"
         columns: tuple[tuple[str, list[BoardTask]], ...]
         if selection.store is None:
-            columns = self._collection_columns()
+            columns = self._collection_columns(selection.collection)
             writable = False
             header_action = ""
             mutation_area = (
@@ -469,13 +480,12 @@ class KanbanWebApp:
         """Render the generic missing-page response.
 
         Args:
-            selection: Selection used for the repository menu.
+            selection: Selection used for the repository menu, or ``None``
+                when no collection snapshot was loaded.
 
         Returns:
             Complete error HTML document.
         """
-        if selection is None:
-            selection = self.default_selection
         return self._page(
             "Not found",
             '<div class="card"><div class="card-body text-center py-6">'
@@ -497,19 +507,20 @@ class KanbanWebApp:
         Args:
             title: Human-readable error title.
             message: Safe error explanation.
-            selection: Selection used for the repository menu.
+            selection: Selection used for the repository menu and return
+                link, or ``None`` when no collection snapshot was loaded.
 
         Returns:
             Complete escaped error HTML document.
         """
-        if selection is None:
-            selection = self.default_selection
+        # Without a snapshot, bare "/" is the only link guaranteed to resolve.
+        back = "/" if selection is None else self.selection_path(selection)
         content = (
             '<div class="card"><div class="card-body">'
             f'<h1 class="h2">{html.escape(title)}</h1>'
             f"<p>{html.escape(message)}</p>"
             f'<a class="btn btn-primary" href="'
-            f'{html.escape(self.selection_path(selection), quote=True)}">'
+            f'{html.escape(back, quote=True)}">'
             "Return to Kanban Board</a>"
             "</div></div>"
         )
@@ -1132,23 +1143,25 @@ class KanbanWebApp:
         Returns:
             Navbar dropdown markup listing All, configured entries, and Current.
         """
+        collection = selection.collection
         items = [
             (
                 "All",
-                self.selection_path(BoardSelection("all", None, None)),
+                self.selection_path(BoardSelection("all", None, None, collection)),
             )
         ]
         items.extend(
-            (entry.name, self.selection_path(BoardSelection(entry.name, entry.name, None)))
-            for entry in self.collection
-        )
-        if self.default_selection.key == "current":
-            items.append(
-                (
-                    "Current",
-                    self.selection_path(self.default_selection),
-                )
+            (
+                entry.name,
+                self.selection_path(
+                    BoardSelection(entry.name, entry.name, None, collection)
+                ),
             )
+            for entry in collection
+        )
+        launch = self.launch_selection(collection)
+        if launch.key == "current":
+            items.append(("Current", self.selection_path(launch)))
         options = "".join(
             f'<a class="dropdown-item" href="{html.escape(path, quote=True)}">'
             f"{html.escape(label)}</a>"
@@ -1168,7 +1181,7 @@ class KanbanWebApp:
         title: str,
         content: str,
         *,
-        selection: BoardSelection,
+        selection: BoardSelection | None,
         header_action: str = "",
     ) -> str:
         """Wrap content in the shared HTML document.
@@ -1178,13 +1191,14 @@ class KanbanWebApp:
             content: Trusted application-rendered markup.
 
         Keyword Args:
-            selection: Selection whose menu and label should be shown.
+            selection: Selection whose menu and label should be shown, or
+                ``None`` to omit the menu when no snapshot was loaded.
             header_action: Trusted application-rendered navbar action.
 
         Returns:
             Complete HTML document.
         """
-        menu = self._render_repository_menu(selection)
+        menu = "" if selection is None else self._render_repository_menu(selection)
         return (
             '<!doctype html><html lang="en"><head>'
             '<meta charset="utf-8"><meta name="viewport" '
@@ -1244,18 +1258,21 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
         """
         if not self._trusted_host():
             self._send_html(
-                403,
-                self.app.render_error(
-                    "Forbidden",
-                    "Request host not allowed.",
-                    self.app.default_selection,
-                ),
+                403, self.app.render_error("Forbidden", "Request host not allowed.")
             )
             return
         parts = urlsplit(self.path)
-        selection = self.app.resolve_selection(parts.query)
+        try:
+            collection = self.app.collections.load()
+        except TodoError as error:
+            self._send_todo_error(error)
+            return
+        selection = self.app.resolve_selection(parts.query, collection)
         if selection is None:
-            self._send_html(404, self.app.render_not_found(self.app.default_selection))
+            self._send_html(
+                404,
+                self.app.render_not_found(self.app.launch_selection(collection)),
+            )
             return
         try:
             if parts.path == "/":
@@ -1345,9 +1362,17 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
                 403, self.app.render_error("Forbidden", "Invalid form token.")
             )
             return
-        selection = self.app.resolve_selection(urlsplit(self.path).query)
+        try:
+            collection = self.app.collections.load()
+        except TodoError as error:
+            self._send_todo_error(error)
+            return
+        selection = self.app.resolve_selection(urlsplit(self.path).query, collection)
         if selection is None:
-            self._send_html(404, self.app.render_not_found(self.app.default_selection))
+            self._send_html(
+                404,
+                self.app.render_not_found(self.app.launch_selection(collection)),
+            )
             return
         try:
             if path == "/tasks":
@@ -1409,10 +1434,9 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
 
         Args:
             error: Repository failure to present.
-            selection: Selection used for the repository menu and return link.
+            selection: Selection used for the repository menu and return link,
+                or ``None`` when no collection snapshot was loaded.
         """
-        if selection is None:
-            selection = self.app.default_selection
         status = {
             "unknown_task": 404,
             "repository_not_found": 404,
@@ -1483,7 +1507,7 @@ class KanbanRequestHandler(BaseHTTPRequestHandler):
 def run_web(
     store: TodoStore | None,
     *,
-    collection: RepositoryCollection,
+    collections: CollectionStore,
     port: int,
     open_browser: bool,
 ) -> None:
@@ -1496,13 +1520,14 @@ def run_web(
         store: Launch Task Repository, or ``None`` when All is selected.
 
     Keyword Args:
-        collection: Immutable Repository Collection loaded before bind.
+        collections: Configuration store each request reads.
         port: Requested loopback TCP port.
         open_browser: Whether to open the board after binding.
     """
-    app = KanbanWebApp(store, collection)
+    app = KanbanWebApp(store, collections)
     with app.create_server(port) as server:
-        url = f"{app.origin}{app.selection_path(app.default_selection)}"
+        launch = app.launch_selection(collections.load())
+        url = f"{app.origin}{app.selection_path(launch)}"
         print(f"Kanban Board: {url}")
         if open_browser:
             webbrowser.open(url)

@@ -6,6 +6,7 @@ import contextlib
 import errno
 import http.client
 import io
+import json
 import os
 import re
 import socket
@@ -17,10 +18,32 @@ from pathlib import Path
 from unittest import mock
 from urllib.parse import urlencode
 
-from bot_todo.config import RepositoryCollection, RepositoryEntry
+from bot_todo.config import CollectionStore, RepositoryEntry
 from bot_todo.repository import TodoError, TodoStore
 from bot_todo.web import KanbanWebApp, run_web
 from tests.support import TodoCliTestCase
+
+#: Simple add-task form used by mutation tests that must not write.
+ADD = {"title": "Never written", "priority": "P2", "task_type": "chore", "simple": "on"}
+
+
+def write_collection(path: Path, *entries: RepositoryEntry) -> CollectionStore:
+    """Write a Repository Collection file and return a store over it.
+
+    Args:
+        path: Configuration file to create or overwrite.
+        *entries: Repository Entries in configuration order.
+
+    Returns:
+        Explicit store reading ``path``.
+    """
+    tables = "".join(
+        f"\n[[repositories]]\nname = {json.dumps(entry.name)}\n"
+        f"path = {json.dumps(str(entry.path))}\n"
+        for entry in entries
+    )
+    path.write_text(f"schema_version = 1\n{tables}", encoding="utf-8")
+    return CollectionStore(path)
 
 
 class KanbanWebTests(TodoCliTestCase):
@@ -30,9 +53,10 @@ class KanbanWebTests(TodoCliTestCase):
         """Create a repository and start an ephemeral Kanban server."""
         super().setUp()
         self.store = TodoStore(self.root)
+        self.collections = write_collection(self.root / "config.toml")
         self.app = KanbanWebApp(
             self.store,
-            RepositoryCollection(()),
+            self.collections,
             csrf_token="test-token",
         )
         self.server = self.app.create_server(0)
@@ -132,19 +156,19 @@ class KanbanWebTests(TodoCliTestCase):
 
     def test_repository_menu_uses_configured_name_and_all_links(self) -> None:
         """Catch a local configured path rendered as duplicate Current."""
-        collection = RepositoryCollection(
-            (
-                RepositoryEntry("alpha.one", self.root),
-                RepositoryEntry("beta", self.root.parent / "beta"),
-            )
+        collections = write_collection(
+            self.root / "config.toml",
+            RepositoryEntry("alpha.one", self.root),
+            RepositoryEntry("beta", self.root.parent / "beta"),
         )
-        app = KanbanWebApp(self.store, collection, csrf_token="test-token")
+        app = KanbanWebApp(self.store, collections, csrf_token="test-token")
+        collection = app.collections.load()
 
-        launch = app.resolve_selection("")
+        launch = app.resolve_selection("", collection)
         self.assertIsNotNone(launch)
         assert launch is not None
         self.assertEqual(launch.key, "alpha.one")
-        named = app.resolve_selection("repo=alpha.one")
+        named = app.resolve_selection("repo=alpha.one", collection)
         self.assertIsNotNone(named)
         assert named is not None
         body = app.render_board(named)
@@ -157,21 +181,22 @@ class KanbanWebTests(TodoCliTestCase):
         """Catch loss of an existing local/root web launch."""
         app = KanbanWebApp(
             self.store,
-            RepositoryCollection(()),
+            write_collection(self.root / "config.toml"),
             csrf_token="test-token",
         )
+        collection = app.collections.load()
 
-        launch = app.resolve_selection("")
+        launch = app.resolve_selection("", collection)
         self.assertIsNotNone(launch)
         assert launch is not None
         self.assertEqual(launch.key, "current")
-        current = app.resolve_selection("repo=current")
+        current = app.resolve_selection("repo=current", collection)
         self.assertIsNotNone(current)
         assert current is not None
         self.assertIsNotNone(current.store)
         assert current.store is not None
         self.assertEqual(current.store.root, self.root)
-        self.assertIsNone(app.resolve_selection("repo=missing"))
+        self.assertIsNone(app.resolve_selection("repo=missing", collection))
 
     def test_invalid_repository_query_returns_generic_not_found(self) -> None:
         """Catch malformed repo queries becoming 500s or leaking selector details."""
@@ -208,13 +233,12 @@ class KanbanWebTests(TodoCliTestCase):
                     task_type="chore",
                     simple=True,
                 )
-            collection = RepositoryCollection(
-                (
-                    RepositoryEntry("alpha.one", self.root),
-                    RepositoryEntry("beta", beta_root),
-                )
+            collections = write_collection(
+                beta_root / "config.toml",
+                RepositoryEntry("alpha.one", self.root),
+                RepositoryEntry("beta", beta_root),
             )
-            app = KanbanWebApp(self.store, collection, csrf_token="test-token")
+            app = KanbanWebApp(self.store, collections, csrf_token="test-token")
             server = app.create_server(0)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -235,6 +259,115 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(status, 200)
         self.assertIn("Beta only work", body)
         self.assertNotIn("Launch only work", body)
+
+    def _beta(self) -> Path:
+        """Create an initialized sibling repository with one task.
+
+        Returns:
+            Resolved path of the new ``beta`` repository.
+        """
+        beta = self.root / "beta"
+        store = TodoStore(beta)
+        store.initialize("Beta")
+        with store.transaction() as transaction:
+            transaction.add(
+                title="Beta only work", priority="P2", task_type="chore", simple=True
+            )
+        return beta
+
+    def test_repos_add_appears_on_next_load_without_restart(self) -> None:
+        """Catch a running board keeping its startup collection after repos add."""
+        beta = self._beta()
+        _, _, before = self.get("/")
+        self.assertNotIn("/?repo=beta", before)
+        self.collections.add(str(beta), "beta")
+        _, _, after = self.get("/")
+        self.assertIn("/?repo=beta", after)
+        self.assertEqual(self.get("/?repo=beta")[0], 200)
+        self.assertIn("Beta only work", self.get("/?repo=all")[2])
+
+    def test_repos_remove_disappears_on_next_load(self) -> None:
+        """Catch a removed entry still served by a running board."""
+        self.collections.add(str(self._beta()), "beta")
+        self.assertIn("Beta only work", self.get("/?repo=all")[2])
+        self.collections.remove("beta")
+        self.assertNotIn("/?repo=beta", self.get("/")[2])
+        self.assertEqual(self.get("/?repo=beta")[0], 404)
+        self.assertNotIn("Beta only work", self.get("/?repo=all")[2])
+
+    def test_launch_repo_added_later_appears_once_by_name(self) -> None:
+        """Catch a newly configured launch repository listed as both name and Current."""
+        self.collections.add(str(self.root), "alpha")
+        body = self.get("/")[2]
+        self.assertEqual(body.count('/?repo=alpha"'), 1)
+        self.assertNotIn(">Current<", body)
+        self.assertEqual(self.get("/?repo=current")[0], 404)
+
+    def test_launch_repo_removed_stays_reachable_as_current(self) -> None:
+        """Catch a removed launch repository becoming unreachable."""
+        self.collections.add(str(self.root), "alpha")
+        self.assertNotIn(">Current<", self.get("/")[2])
+        self.collections.remove("alpha")
+        status, _, body = self.get("/")
+        self.assertEqual(status, 200)
+        self.assertIn(">Current<", body)
+        self.assertEqual(self.get("/?repo=current")[0], 200)
+        self.assertEqual(self.get("/?repo=alpha")[0], 404)
+
+    def test_malformed_config_fails_the_request_with_the_config_error(self) -> None:
+        """Catch a broken config served from a stale snapshot or writing anyway."""
+        config = self.collections.path
+        before = self.store.todo_path.read_bytes()
+        config.write_text("this is not toml = [\n", encoding="utf-8")
+        status, _, body = self.get("/")
+        self.assertEqual(status, 500)
+        self.assertIn("is not valid TOML", body)
+        self.assertIn('href="/"', body)
+        self.assertNotIn("/?repo=current", body)
+        self.assertNotEqual(self.get("/board-version")[0], 200)
+        status, _, body = self.post("/tasks", ADD)
+        self.assertEqual(status, 500)
+        self.assertIn("is not valid TOML", body)
+        self.assertEqual(self.store.todo_path.read_bytes(), before)
+        config.unlink()
+        self.assertIn("configuration file not found", self.get("/")[2])
+        write_collection(config)
+        self.assertEqual(self.get("/")[0], 200)
+
+    def test_post_to_removed_repository_is_not_found(self) -> None:
+        """Catch a stale tab writing to a repository removed from the collection."""
+        beta = self._beta()
+        self.collections.add(str(beta), "beta")
+        before = (beta / "TODO.md").read_bytes()
+        self.collections.remove("beta")
+        status, _, _ = self.post("/tasks?repo=beta", ADD)
+        self.assertEqual(status, 404)
+        self.assertEqual((beta / "TODO.md").read_bytes(), before)
+
+    def test_pre_load_rejection_links_to_bare_root(self) -> None:
+        """Catch pre-load rejections linking to a Current board that 404s."""
+        self.collections.add(str(self.root), "alpha")
+        body = urlencode({"_csrf": "wrong", **ADD})
+        status, _, page = self.request(
+            "POST",
+            "/tasks",
+            body,
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": self.app.origin,
+            },
+        )
+        self.assertEqual(status, 403)
+        self.assertIn('href="/"', page)
+        self.assertNotIn("/?repo=current", page)
+
+    def test_untrusted_host_never_reads_the_config(self) -> None:
+        """Catch untrusted hosts triggering config reads or seeing entry names."""
+        self.collections.add(str(self._beta()), "beta")
+        self.collections.path.write_text("this is not toml = [\n", encoding="utf-8")
+        status, _, page = self.request("GET", "/", headers={"Host": "evil.example"})
+        self.assertEqual(status, 403)
+        self.assertNotIn("beta", page)
 
     def test_board_groups_tasks_by_state_and_escapes_content(self) -> None:
         """Catch missing columns, wrong state grouping, and unescaped titles."""
@@ -1075,7 +1208,7 @@ class KanbanWebTests(TodoCliTestCase):
         ):
             run_web(
                 self.store,
-                collection=RepositoryCollection(()),
+                collections=self.collections,
                 port=0,
                 open_browser=True,
             )
@@ -1443,13 +1576,12 @@ class CollectionKanbanWebTests(unittest.TestCase):
         self.beta = root / "beta"
         TodoStore(self.alpha).initialize("Alpha")
         TodoStore(self.beta).initialize("Beta")
-        collection = RepositoryCollection(
-            (
-                RepositoryEntry("alpha.one", self.alpha),
-                RepositoryEntry("beta", self.beta),
-            )
+        collections = write_collection(
+            root / "config.toml",
+            RepositoryEntry("alpha.one", self.alpha),
+            RepositoryEntry("beta", self.beta),
         )
-        self.app = KanbanWebApp(None, collection, csrf_token="test-token")
+        self.app = KanbanWebApp(None, collections, csrf_token="test-token")
         self.server = self.app.create_server(0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -1568,6 +1700,18 @@ class CollectionKanbanWebTests(unittest.TestCase):
         for target in targets:
             self.assertIn(f'id="{target[1:]}"', body)
 
+    def test_collection_change_moves_only_the_all_token(self) -> None:
+        """Catch /board-version ignoring collection changes or hashing config.toml."""
+        _, _, all_before = self.get("/board-version?repo=all")
+        _, _, alpha_before = self.get("/board-version?repo=alpha.one")
+        gamma = self.alpha.parent / "gamma"
+        TodoStore(gamma).initialize("Gamma")
+        self.app.collections.add(str(gamma), "gamma")
+        _, _, all_after = self.get("/board-version?repo=all")
+        _, _, alpha_after = self.get("/board-version?repo=alpha.one")
+        self.assertNotEqual(all_before, all_after)
+        self.assertEqual(alpha_before, alpha_after)
+
     def test_all_modal_ids_stay_distinct_when_repository_names_collide(self) -> None:
         """Catch punctuation normalization collapsing All modal ids."""
         with tempfile.TemporaryDirectory() as directory:
@@ -1586,11 +1730,10 @@ class CollectionKanbanWebTests(unittest.TestCase):
                 )
             app = KanbanWebApp(
                 None,
-                RepositoryCollection(
-                    (
-                        RepositoryEntry("alpha.one", dotted),
-                        RepositoryEntry("alpha-one", dashed),
-                    )
+                write_collection(
+                    root / "config.toml",
+                    RepositoryEntry("alpha.one", dotted),
+                    RepositoryEntry("alpha-one", dashed),
                 ),
                 csrf_token="test-token",
             )
@@ -1627,11 +1770,10 @@ class CollectionKanbanWebTests(unittest.TestCase):
         missing = self.alpha.parent / "gone"
         app = KanbanWebApp(
             None,
-            RepositoryCollection(
-                (
-                    RepositoryEntry("alpha.one", self.alpha),
-                    RepositoryEntry("gone", missing),
-                )
+            write_collection(
+                self.alpha.parent / "gone.toml",
+                RepositoryEntry("alpha.one", self.alpha),
+                RepositoryEntry("gone", missing),
             ),
             csrf_token="test-token",
         )
@@ -1659,7 +1801,11 @@ class CollectionKanbanWebTests(unittest.TestCase):
 
     def test_empty_collection_all_board_has_four_empty_columns(self) -> None:
         """Catch All requiring Current or hiding empty state columns."""
-        app = KanbanWebApp(None, RepositoryCollection(()), csrf_token="test-token")
+        app = KanbanWebApp(
+            None,
+            write_collection(self.alpha.parent / "empty.toml"),
+            csrf_token="test-token",
+        )
         server = app.create_server(0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()

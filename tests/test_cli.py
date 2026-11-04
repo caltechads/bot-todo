@@ -600,8 +600,8 @@ class WebCommandTests(TodoCliTestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIsNone(run_web.call_args.args[0])
-        collection = run_web.call_args.kwargs["collection"]
-        self.assertEqual([entry.name for entry in collection], ["demo"])
+        collections = run_web.call_args.kwargs["collections"]
+        self.assertEqual(collections.path, config.resolve())
         self.assertEqual(run_web.call_args.kwargs["port"], 0)
         self.assertFalse(run_web.call_args.kwargs["open_browser"])
 
@@ -614,7 +614,9 @@ class WebCommandTests(TodoCliTestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIsNone(run_web.call_args.args[0])
-        self.assertEqual(len(run_web.call_args.kwargs["collection"]), 0)
+        collections = run_web.call_args.kwargs["collections"]
+        self.assertFalse(collections.explicit)
+        self.assertEqual(len(collections.load()), 0)
 
     @mock.patch("bot_todo.cli.run_web")
     def test_repo_web_passes_the_named_entry_and_collection(
@@ -635,8 +637,7 @@ class WebCommandTests(TodoCliTestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(run_web.call_args.args[0].root, self.root)
         self.assertEqual(
-            [entry.name for entry in run_web.call_args.kwargs["collection"]],
-            ["demo"],
+            run_web.call_args.kwargs["collections"].path, config.resolve()
         )
 
     @mock.patch("bot_todo.cli.run_web")
@@ -653,7 +654,9 @@ class WebCommandTests(TodoCliTestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertEqual(run_web.call_args.args[0].root, self.root)
-        self.assertEqual(len(run_web.call_args.kwargs["collection"]), 0)
+        self.assertEqual(
+            run_web.call_args.kwargs["collections"].path, config.resolve()
+        )
 
     @mock.patch("bot_todo.cli.run_web")
     def test_explicit_web_configuration_fails_before_the_server_binds(
@@ -680,8 +683,9 @@ class WebCommandTests(TodoCliTestCase):
         self.assertEqual(result.returncode, 0)
         store = run_web.call_args.args[0]
         self.assertEqual(store.root, self.root)
-        collection = run_web.call_args.kwargs["collection"]
-        self.assertEqual(len(collection), 0)
+        collections = run_web.call_args.kwargs["collections"]
+        self.assertFalse(collections.explicit)
+        self.assertEqual(len(collections.load()), 0)
         self.assertEqual(run_web.call_args.kwargs["port"], 0)
         self.assertFalse(run_web.call_args.kwargs["open_browser"])
 

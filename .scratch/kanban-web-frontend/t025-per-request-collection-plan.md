@@ -25,8 +25,9 @@
 1. Broken config while a board tab is open: `/board-version` must return a non-200 (the live-reload script ignores non-OK, so no reload loop). Test in Task 1.
 2. POST against a board after the config breaks must fail with the config error and write nothing. Test in Task 1.
 3. POST to `?repo=beta` after `beta` was removed must 404 and not mutate beta's `TODO.md`. Test in Task 1.
-4. Untrusted-host 403 pages must not read the config (a broken config must still yield 403, not 500) and must not list configured Repository Names. Test in Task 1.
-5. A `repos add` holding the exclusive lock while a request loads: the request waits up to the lock timeout, then gets 409 `conflict`. Already covered by `RepositoryLock` tests; no new test.
+4. Rejections before the load (bad Origin or CSRF from a stale tab after a restart) and the config-error page must link back to bare `/`, never `/?repo=current`, even when the launch repo is configured. Test in Task 1.
+5. Untrusted-host 403 pages must not read the config (a broken config must still yield 403, not 500) and must not list configured Repository Names. Test in Task 1.
+6. A `repos add` holding the exclusive lock while a request loads: the request waits up to the lock timeout, then gets 409 `conflict`. Already covered by `RepositoryLock` tests; no new test.
 
 ---
 
@@ -43,7 +44,7 @@
   - `KanbanWebApp(store: TodoStore | None, collections: CollectionStore, csrf_token: str | None = None)`; attribute `collections` replaces `collection`; `default_selection` is removed.
   - `KanbanWebApp.launch_selection(collection: RepositoryCollection) -> BoardSelection` (renamed public from `_launch_selection`; same rules, result carries `collection`).
   - `KanbanWebApp.resolve_selection(query: str, collection: RepositoryCollection) -> BoardSelection | None` — empty query → `launch_selection(collection)`; `repo=current` → that only if its key is `"current"`; named entry looked up in `collection`.
-  - `render_not_found(selection=None)`, `render_error(title, message, selection=None)`, `_send_todo_error(error, selection=None)`: `None` now means `launch_selection(RepositoryCollection(()))` — an empty snapshot, so pre-trust and pre-load error pages never read the config.
+  - `render_not_found(selection=None)`, `render_error(title, message, selection=None)`, `_send_todo_error(error, selection=None)`, `_page(..., selection: BoardSelection | None)`: `None` now means **no snapshot** — the page renders the navbar without the repository menu, and the return link is bare `/` (which always resolves to the launch board once the config is good). Used by every rejection before the load (host, Origin, media type, body, CSRF) and by the config-error page. Never fabricate a launch selection from an empty collection: it would label a configured launch repo as Current and link to `/?repo=current`, which 404s.
   - `run_web(store, *, collections: CollectionStore, port: int, open_browser: bool)`.
   - Test helper in `tests/test_web.py`: `write_collection(path: Path, *entries: RepositoryEntry) -> CollectionStore` — writes `schema_version = 1` plus one `[[repositories]]` table per entry (quote values with `json.dumps`), returns `CollectionStore(path)`.
 
@@ -69,6 +70,7 @@ def test_repos_remove_disappears_on_next_load(self):
     self.collections.remove("beta")
     self.assertNotIn("/?repo=beta", self.get("/")[2])
     self.assertEqual(self.get("/?repo=beta")[0], 404)
+    self.assertNotIn("Beta only work", self.get("/?repo=all")[2])
 
 def test_launch_repo_added_later_appears_once_by_name(self):
     self.collections.add(str(self.root), "alpha")
@@ -93,6 +95,8 @@ def test_malformed_config_fails_the_request_with_the_config_error(self):
     self.assertIn("is not valid TOML", body)
     self.assertNotEqual(self.get("/board-version")[0], 200)      # Review Focus 1
     # Review Focus 2: POST add with valid CSRF → 500, TODO.md bytes unchanged
+    self.assertIn('href="/"', body)                              # Review Focus 4
+    self.assertNotIn("/?repo=current", body)
     config.unlink()
     self.assertIn("configuration file not found", self.get("/")[2])
     write_collection(config)                                      # repaired
@@ -101,12 +105,16 @@ def test_malformed_config_fails_the_request_with_the_config_error(self):
 def test_post_to_removed_repository_is_not_found(self):          # Review Focus 3
     # config has beta; remove; POST /tasks?repo=beta → 404; beta TODO.md unchanged
 
-def test_untrusted_host_never_reads_the_config(self):            # Review Focus 4
+def test_pre_load_rejection_links_to_bare_root(self):            # Review Focus 4
+    # config has launch root as "alpha"; POST /tasks with Origin ok, _csrf=wrong
+    # → 403, body has href="/" and no "/?repo=current"
+
+def test_untrusted_host_never_reads_the_config(self):            # Review Focus 5
     # config has beta, then made malformed; GET with Host: evil.example → 403
     # body has no "beta"
 ```
 
-Use `CollectionStore.add(path: str, name: str | None)` / `.remove(name: str)` for mutations (same code path as `bot-todo repos`). In `KanbanAllBoardTests`, add: after `self.app.collections.add(gamma, "gamma")`, `GET /board-version?repo=all` token differs from before.
+Use `CollectionStore.add(path: str, name: str | None)` / `.remove(name: str)` for mutations (same code path as `bot-todo repos`). In `CollectionKanbanWebTests`, add: after `self.app.collections.add(gamma, "gamma")`, `GET /board-version?repo=all` token differs from before.
 
 - [ ] **Step 3: Run tests to verify they fail**
 
@@ -118,7 +126,8 @@ Expected: new tests FAIL (menu still shows startup snapshot / malformed config s
   - `__init__` stores `self.collections`; drop `self.collection` and `self.default_selection`.
   - Every former `self.collection` read uses `selection.collection` (`_collection_columns(selection)`, `board_version`, `_render_repository_menu`); the menu adds Current when `self.launch_selection(selection.collection).key == "current"`.
   - `do_GET`: after the host check, `collection = self.app.collections.load()` inside `try/except TodoError → self._send_todo_error(error); return`, then `resolve_selection(parts.query, collection)`; on `None`, `render_not_found(self.app.launch_selection(collection))`.
-  - `do_POST`: same load **after** the CSRF check, before `resolve_selection`.
+  - `do_POST`: same load **after** the CSRF check, before `resolve_selection`. Rejections before that pass no selection (menu-less page, `/` return link).
+  - `_page`/`render_error`: when `selection is None`, omit `_render_repository_menu` and use `/` as the return link.
   - `run_web` prints `app.selection_path(app.launch_selection(collections.load()))`.
 
 - [ ] **Step 5: Wire the CLI** in `src/bot_todo/cli.py` web branch

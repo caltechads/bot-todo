@@ -17,3 +17,10 @@
   - Context: .scratch/installable-bot-todo/spec.md phase 2; .scratch/installable-bot-todo/phase-2-plan.md
   - Outcome: completed
   - Closed: 2026-08-12
+
+- [x] **T004** Add aggregate read queries to the bot-todo CLI #feature
+  - Acceptance: --all answers list, critical, and actionable across the configured Repository Collection in priority, configuration, and file order with repository provenance, rejects every other command, and fails entirely with exit 3 when any repository fails
+  - Context: .scratch/installable-bot-todo/phase-3-plan.md
+  - Related: T003
+  - Outcome: completed
+  - Closed: 2026-08-12

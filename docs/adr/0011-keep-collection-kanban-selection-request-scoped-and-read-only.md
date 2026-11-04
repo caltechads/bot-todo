@@ -1,6 +1,6 @@
 # 11. Keep collection Kanban selection request-scoped and read-only
 
-Status: accepted (2026-08-26)
+Status: accepted (2026-08-26); collection loading and launch selection amended by ADR 0014
 
 ## Context
 

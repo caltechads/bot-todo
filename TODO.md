@@ -1,5 +1,5 @@
 # TODO — Bot Todo
-<!-- todo-format: 2; next-id: 25 -->
+<!-- todo-format: 2; next-id: 26 -->
 
 ## P0 — Critical / Blocking
 
@@ -7,12 +7,17 @@
 
 ## P2 — Backlog
 
-- [ ] **T024** Install the todo skill for every Skill Target in one install-skill run #feature #skill
-  - Acceptance: install-skill --target all installs every Skill Target in sorted order; any conflict (without --force) is reported for all targets before anything is written; --destination with all is a usage error; --dry-run/--force apply per target; single-target JSON unchanged, all returns data.installations; README and tests updated
-  - Context: Grilled 2026-10-27: chose --target all over a subcommand --all to avoid overloading the Repository Collection --all selector. Plan: .scratch/install-all-skill-targets/plan.md. ADR: docs/adr/0013-select-every-skill-target-with-target-all.md
-  - Review: 2026-10-27
+- [ ] **T025** Reload the Repository Collection so newly added repos appear in the running web app #feature #web
+  - Acceptance: With 'bot-todo web' running, 'bot-todo repos add' and 'repos remove' change the board's selector and the All board on the next page load, without a restart. A launch repo that is added later appears once, under its Repository Name, not also as Current. A launch repo that is removed stays reachable at bare / as Current. A malformed config makes that request fail with the configuration error. Covered by tests.
+  - Context: Design: docs/adr/0014-read-the-repository-collection-per-web-request.md (amends ADR 0011). Today KanbanWebApp (src/bot_todo/web.py) keeps a process-lifetime RepositoryCollection and default_selection from startup (cli.py web command). Per ADR 0014: each request reads its own snapshot via CollectionStore.load (shared lock); _launch_selection runs per request against that snapshot; /board-version uses the request snapshot and does not watch config.toml.
 
 ## Done (recent)
+
+- [x] **T024** Install the todo skill for every Skill Target in one install-skill run #feature #skill
+  - Acceptance: install-skill --target all installs every Skill Target in sorted order; any conflict (without --force) is reported for all targets before anything is written; --destination with all is a usage error; --dry-run/--force apply per target; single-target JSON unchanged, all returns data.installations; README and tests updated
+  - Context: Grilled 2026-10-27: chose --target all over a subcommand --all to avoid overloading the Repository Collection --all selector. Plan: .scratch/install-all-skill-targets/plan.md. ADR: docs/adr/0013-select-every-skill-target-with-target-all.md
+  - Outcome: completed
+  - Closed: 2026-10-27
 
 - [x] **T023** Keep closed tasks archived together when a closed task in Done names another as a blocker #bug
   - Acceptance: Done when completing or cancelling a task that pushes Done past its retention limit never archives a closed task that another task remaining in Done (open or closed) lists as a blocker, or archives the dependent with it, so the post-write validation no longer fails with 'references unknown blocker'; a regression test fills Done to the limit with a closed task blocked by an older closed task and completes one more task successfully.
@@ -133,12 +138,5 @@
 - [x] **T005** Bundle and install the todo skill (Phase 4) #feature
   - Acceptance: install-skill installs the packaged todo skill for codex/claude/cursor/grok with manifests, conflict detection, dry-run, and forced replacement; skill assets ship in wheel and sdist; root skills/ tree removed
   - Context: .scratch/installable-bot-todo/phase-4-plan.md
-  - Outcome: completed
-  - Closed: 2026-08-12
-
-- [x] **T004** Add aggregate read queries to the bot-todo CLI #feature
-  - Acceptance: --all answers list, critical, and actionable across the configured Repository Collection in priority, configuration, and file order with repository provenance, rejects every other command, and fails entirely with exit 3 when any repository fails
-  - Context: .scratch/installable-bot-todo/phase-3-plan.md
-  - Related: T003
   - Outcome: completed
   - Closed: 2026-08-12

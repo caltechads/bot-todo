@@ -30,3 +30,9 @@
   - Context: .scratch/installable-bot-todo/phase-4-plan.md
   - Outcome: completed
   - Closed: 2026-08-12
+
+- [x] **T007** Manage the global Repository Collection config from the CLI #feature
+  - Acceptance: Done when bot-todo can show the active config path, list configured repositories, and add/remove entries without hand-editing the TOML, each subcommand emitting --json output and validating the file before and after the write.
+  - Context: config.py only loads and validates the collection today; every change means editing the TOML by hand. Spec: .scratch/repos-cli/spec.md. Plan: .scratch/repos-cli/plan.md
+  - Outcome: completed
+  - Closed: 2026-08-14

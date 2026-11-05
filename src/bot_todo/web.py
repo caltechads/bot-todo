@@ -47,7 +47,7 @@ SECURITY_HEADERS = (
         ),
     ),
 )
-#: Board script that reloads once ``/board-version`` reports a new token.
+#: Board script that reloads once ``/board-version`` reports a new token or 404.
 LIVE_RELOAD_SCRIPT = """(() => {
   const board = document.querySelector("[data-board-version]");
   if (!board) return;
@@ -58,6 +58,10 @@ LIVE_RELOAD_SCRIPT = """(() => {
     if (document.hidden) return;
     try {
       const response = await fetch(board.dataset.versionUrl, { cache: "no-store" });
+      if (response.status === 404) {
+        if (!busy()) location.reload();
+        return;
+      }
       if (!response.ok) return;
       if ((await response.text()) !== board.dataset.boardVersion && !busy()) {
         location.reload();
@@ -341,7 +345,7 @@ class KanbanWebApp:
         )
 
     def board_version(self, selection: BoardSelection) -> str:
-        """Fingerprint the ``TODO.md`` file(s) behind one board selection.
+        """Fingerprint the Repository Collection and ``TODO.md`` file(s) behind a board.
 
         Side Effects:
             Stats the selected ``TODO.md`` files.
@@ -350,14 +354,20 @@ class KanbanWebApp:
             selection: Request-local board selection.
 
         Returns:
-            Opaque SHA-256 hex token over each file's path, mtime, and size;
-            a missing or unreadable file contributes a fixed sentinel.
+            Opaque SHA-256 hex token over the snapshot's Repository Names and
+            paths, sorted by name, and each selected file's path, mtime, and
+            size; a missing or unreadable file contributes a fixed sentinel.
         """
         if selection.store is not None:
             paths = [selection.store.todo_path]
         else:
             paths = [entry.path / TODO_FILENAME for entry in selection.collection]
         digest = hashlib.sha256()
+        # Sorted like the menu (T026): a reorder leaves single-repository pages
+        # unchanged.
+        for entry in sorted(selection.collection, key=lambda entry: entry.name):
+            digest.update(f"entry\0{entry.name}\0{entry.path}\n".encode())
+        # Configuration order on purpose: All's card order follows it (ADR 0015).
         for path in paths:
             try:
                 stat = path.stat()

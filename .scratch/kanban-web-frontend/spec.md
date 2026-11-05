@@ -110,12 +110,16 @@ same-origin scripts and `fetch()` for live reload; `data:` images remain
 allowed for Tabler; and all other sources remain restricted.
 
 Live reload: every 200 board page embeds an opaque `data-board-version` token,
-computed from `stat()` of the selected `TODO.md` file(s) before the snapshot
+computed from the request's Repository Names and paths (sorted by name) and
+`stat()` of the selected `TODO.md` file(s) before the snapshot
 read, and loads the same-origin `/live-reload.js`. While the tab is visible the
 script polls `GET /board-version?repo=<key>` every 2 seconds and reloads when
 the token differs, unless a modal, a card Cancel-reason form, or a focused form
-control is in use; the next idle tick reloads instead. All covers every
-configured repository. Error pages never load the script. See ADR 0012.
+control is in use; the next idle tick reloads instead. A 404 from the version
+endpoint (the selection no longer resolves) also reloads, landing on the
+not-found page; other errors are ignored. All covers every configured
+repository, in configuration order. Error pages never load the script. See
+ADRs 0012 and 0015.
 
 Unknown paths, including former `GET /tasks/{task_id}` URLs, return 404;
 malformed forms return 400; request trust failures
@@ -128,7 +132,7 @@ the repository menu, and renders no partial task cards.
 ## Exclusions
 
 Authentication, non-loopback binding, collection-wide mutations,
-drag-and-drop, claims, full archive listing, live configuration reload,
+drag-and-drop, claims, full archive listing,
 WebSockets, and a JSON API remain outside this board. Task editing of
 open and Review work is available after selecting one Task Repository; the
 collection-wide view remains read-only.

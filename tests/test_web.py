@@ -1622,6 +1622,7 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         self.assertIn("location.reload()", body)
         self.assertIn("data-board-version", body)
+        self.assertIn("response.status === 404", body)
         policy = headers["Content-Security-Policy"]
         self.assertIn("script-src 'self' https://cdn.jsdelivr.net", policy)
         self.assertIn("connect-src 'self'", policy)
@@ -1777,17 +1778,60 @@ class CollectionKanbanWebTests(unittest.TestCase):
         for target in targets:
             self.assertIn(f'id="{target[1:]}"', body)
 
-    def test_collection_change_moves_only_the_all_token(self) -> None:
-        """Catch /board-version ignoring collection changes or hashing config.toml."""
-        _, _, all_before = self.get("/board-version?repo=all")
-        _, _, alpha_before = self.get("/board-version?repo=alpha.one")
+    def tokens(self) -> tuple[str, str]:
+        """Return the All and alpha.one board version tokens.
+
+        Returns:
+            ``(all_token, alpha_token)``.
+        """
+        return (
+            self.get("/board-version?repo=all")[2],
+            self.get("/board-version?repo=alpha.one")[2],
+        )
+
+    def test_collection_change_moves_every_token(self) -> None:
+        """Catch a single-repository token that ignores repos add."""
+        before = self.tokens()
         gamma = self.alpha.parent / "gamma"
         TodoStore(gamma).initialize("Gamma")
         self.app.collections.add(str(gamma), "gamma")
-        _, _, all_after = self.get("/board-version?repo=all")
-        _, _, alpha_after = self.get("/board-version?repo=alpha.one")
-        self.assertNotEqual(all_before, all_after)
-        self.assertEqual(alpha_before, alpha_after)
+        after = self.tokens()
+        self.assertNotEqual(before[0], after[0])
+        self.assertNotEqual(before[1], after[1])
+
+    def test_rename_moves_tokens_without_a_path_change(self) -> None:
+        """Catch a token built from paths only."""
+        before = self.tokens()
+        write_collection(
+            self.app.collections.path,
+            RepositoryEntry("alpha.one", self.alpha),
+            RepositoryEntry("bravo", self.beta),
+        )
+        after = self.tokens()
+        self.assertNotEqual(before[0], after[0])
+        self.assertNotEqual(before[1], after[1])
+
+    def test_reorder_moves_only_the_all_token(self) -> None:
+        """Catch a reorder reloading identical pages, or leaving All stale."""
+        before = self.tokens()
+        write_collection(
+            self.app.collections.path,
+            RepositoryEntry("beta", self.beta),
+            RepositoryEntry("alpha.one", self.alpha),
+        )
+        after = self.tokens()
+        self.assertNotEqual(before[0], after[0])
+        self.assertEqual(before[1], after[1])
+
+    def test_removed_selection_reloads_once_to_not_found(self) -> None:
+        """Pin the 404 the script reloads on, and that the 404 page stops polling."""
+        self.app.collections.remove("beta")
+        status, _, _ = self.get("/board-version?repo=beta")
+        self.assertEqual(status, 404)
+        status, _, body = self.get("/?repo=beta")
+        self.assertEqual(status, 404)
+        self.assertIn('href="/?repo=alpha.one"', body)
+        self.assertNotIn("/live-reload.js", body)
 
     def test_all_modal_ids_stay_distinct_when_repository_names_collide(self) -> None:
         """Catch punctuation normalization collapsing All modal ids."""

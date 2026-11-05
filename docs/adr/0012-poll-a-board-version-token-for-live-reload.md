@@ -1,6 +1,6 @@
 # 12. Poll a board version token for live reload
 
-Status: accepted (2026-10-23); amends the CSP in ADR 0008 and the client-script note in ADR 0010
+Status: accepted (2026-10-23); amends the CSP in ADR 0008 and the client-script note in ADR 0010; `/board-version` token amended by ADR 0015
 
 ## Context
 

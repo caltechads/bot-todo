@@ -1,6 +1,6 @@
 # 14. Read the Repository Collection per web request
 
-Status: accepted (2026-11-03); amends ADR 0011
+Status: accepted (2026-11-03); amends ADR 0011; `/board-version` token amended by ADR 0015
 
 ## Context
 

@@ -11,7 +11,7 @@
   - Acceptance: With 'bot-todo web' running and a single-repository board open, 'bot-todo repos add' or 'repos remove' makes the open page reload by itself so the selector shows the change, with no manual reload. The /board-version token includes the request snapshot's repository names and paths (not config.toml mtime). A config change that leaves names and paths unchanged causes no reload of a single-repository board; an All board reloads on a reorder only because its card order follows configuration order. Covered by tests.
   - Context: Follow-up to T025. Plan: .scratch/kanban-web-frontend/t027-live-collection-selector-plan.md. ADR: docs/adr/0015-include-the-repository-collection-in-the-board-version-token.md (amends ADR 0014's /board-version decision and ADR 0012's token). Resolved: every selection hashes (name, path) pairs sorted by name, never config.toml; All's TODO.md parts stay in configuration order because All's card order follows it; the live-reload script also reloads on a 404 so a tab whose repository was removed lands on Not found.
   - Related: T025
-  - Claimed: claude | 2026-11-05 | t027-live-collection-selector
+  - Review: 2026-11-05
 
 ## Done (recent)
 

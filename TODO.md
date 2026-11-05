@@ -7,16 +7,18 @@
 
 ## P2 — Backlog
 
-- [ ] **T026** Sort the web board repository menu alphabetically, with All pinned first #feature #web
-  - Acceptance: The repository dropdown lists All first, then a Tabler dropdown-divider, then configured repositories sorted case-insensitively by name; the Current entry (when shown) stays after the sorted list; a test covers the ordering and divider.
-  - Context: Menu is rendered by _render_repository_menu in src/bot_todo/web.py (~line 1136), which currently emits entries in Repository Collection order. Use Tabler/Bootstrap's native <div class="dropdown-divider"></div> for the separator; no custom CSS needed. Open question: whether Current should also get its own divider.
-
 - [ ] **T027** Refresh the board's repository selector live when the Repository Collection changes #feature #web
   - Acceptance: With 'bot-todo web' running and a single-repository board open, 'bot-todo repos add' or 'repos remove' makes the open page reload by itself so the selector shows the change, with no manual reload. The /board-version token includes the request snapshot's repository names and paths (not config.toml mtime). A config change that leaves names and paths unchanged causes no reload. Covered by tests.
   - Context: Follow-up to T025, which met its spec (changes appear on next page load). ADR 0014 (docs/adr/0014-read-the-repository-collection-per-web-request.md) deferred 'Add the configuration file to the /board-version token' until users expect open single-repository boards to refresh the selector by themselves; that is now the case. Amend or supersede ADR 0014's /board-version decision.
   - Related: T025
 
 ## Done (recent)
+
+- [x] **T026** Sort the web board repository menu alphabetically, with All pinned first #feature #web
+  - Acceptance: The repository dropdown lists All first, then a Tabler dropdown-divider, then configured repositories sorted by Repository Name, case-insensitively; when Current is shown it follows a second divider after the sorted list; dividers appear only between non-empty groups; tests cover the ordering and dividers.
+  - Context: Plan: .scratch/kanban-web-frontend/t026-sorted-repository-menu-plan.md (no ADR: cheap to reverse). Builds on T025. Menu is rendered by _render_repository_menu in src/bot_todo/web.py; sorting is presentation-only, the Repository Collection keeps configuration order. Use Tabler/Bootstrap's native <div class="dropdown-divider"></div>; no custom CSS. Resolved: Current gets its own divider.
+  - Outcome: completed
+  - Closed: 2026-11-05
 
 - [x] **T025** Reload the Repository Collection so newly added repos appear in the running web app #feature #web
   - Acceptance: With 'bot-todo web' running, 'bot-todo repos add' and 'repos remove' change the board's selector and the All board on the next page load, without a restart. A launch repo that is added later appears once, under its Repository Name, not also as Current. A launch repo that is removed stays reachable at bare / as Current. A malformed config makes that request fail with the configuration error. Covered by tests.
@@ -137,11 +139,5 @@
 - [x] **T008** Default init --name to the cwd basename #feature
   - Acceptance: Done when bot-todo init accepts a missing --name and writes the basename of the repository path (--root if given, otherwise cwd) into the TODO.md heading; --name remains an optional override; help, README, and the todo skill document --name as optional.
   - Context: .scratch/init-default-name/plan.md
-  - Outcome: completed
-  - Closed: 2026-08-14
-
-- [x] **T007** Manage the global Repository Collection config from the CLI #feature
-  - Acceptance: Done when bot-todo can show the active config path, list configured repositories, and add/remove entries without hand-editing the TOML, each subcommand emitting --json output and validating the file before and after the write.
-  - Context: config.py only loads and validates the collection today; every change means editing the TOML by hand. Spec: .scratch/repos-cli/spec.md. Plan: .scratch/repos-cli/plan.md
   - Outcome: completed
   - Closed: 2026-08-14

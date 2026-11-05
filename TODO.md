@@ -7,13 +7,14 @@
 
 ## P2 — Backlog
 
-- [ ] **T027** Refresh the board's repository selector live when the Repository Collection changes #feature #web
+## Done (recent)
+
+- [x] **T027** Refresh the board's repository selector live when the Repository Collection changes #feature #web
   - Acceptance: With 'bot-todo web' running and a single-repository board open, 'bot-todo repos add' or 'repos remove' makes the open page reload by itself so the selector shows the change, with no manual reload. The /board-version token includes the request snapshot's repository names and paths (not config.toml mtime). A config change that leaves names and paths unchanged causes no reload of a single-repository board; an All board reloads on a reorder only because its card order follows configuration order. Covered by tests.
   - Context: Follow-up to T025. Plan: .scratch/kanban-web-frontend/t027-live-collection-selector-plan.md. ADR: docs/adr/0015-include-the-repository-collection-in-the-board-version-token.md (amends ADR 0014's /board-version decision and ADR 0012's token). Resolved: every selection hashes (name, path) pairs sorted by name, never config.toml; All's TODO.md parts stay in configuration order because All's card order follows it; the live-reload script also reloads on a 404 so a tab whose repository was removed lands on Not found.
   - Related: T025
-  - Review: 2026-11-05
-
-## Done (recent)
+  - Outcome: completed
+  - Closed: 2026-11-05
 
 - [x] **T026** Sort the web board repository menu alphabetically, with All pinned first #feature #web
   - Acceptance: The repository dropdown lists All first, then a Tabler dropdown-divider, then configured repositories sorted by Repository Name, case-insensitively; when Current is shown it follows a second divider after the sorted list; dividers appear only between non-empty groups; tests cover the ordering and dividers.
@@ -134,11 +135,5 @@
 - [x] **T014** Group human --all list by Repository Name and show Tags #feature
   - Acceptance: Human --all list groups open tasks under Repository Name headers without repeating the name on each line; every human list line shows ordinary Tags as #tag; JSON, critical, and actionable keep priority-first Aggregate Query order.
   - Context: .scratch/grouped-human-list/plan.md and docs/adr/0004-group-human-all-list-by-repository-name.md
-  - Outcome: completed
-  - Closed: 2026-08-14
-
-- [x] **T008** Default init --name to the cwd basename #feature
-  - Acceptance: Done when bot-todo init accepts a missing --name and writes the basename of the repository path (--root if given, otherwise cwd) into the TODO.md heading; --name remains an optional override; help, README, and the todo skill document --name as optional.
-  - Context: .scratch/init-default-name/plan.md
   - Outcome: completed
   - Closed: 2026-08-14

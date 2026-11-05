@@ -36,3 +36,9 @@
   - Context: config.py only loads and validates the collection today; every change means editing the TOML by hand. Spec: .scratch/repos-cli/spec.md. Plan: .scratch/repos-cli/plan.md
   - Outcome: completed
   - Closed: 2026-08-14
+
+- [x] **T008** Default init --name to the cwd basename #feature
+  - Acceptance: Done when bot-todo init accepts a missing --name and writes the basename of the repository path (--root if given, otherwise cwd) into the TODO.md heading; --name remains an optional override; help, README, and the todo skill document --name as optional.
+  - Context: .scratch/init-default-name/plan.md
+  - Outcome: completed
+  - Closed: 2026-08-14

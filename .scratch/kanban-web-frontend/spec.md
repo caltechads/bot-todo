@@ -81,8 +81,11 @@ internet connection is required to load the presentation assets.
 
 The header contains a Tabler repository dropdown whose button names `All`, the
 selected Repository Name, or `Current`. Its ordinary GET links list `All`,
-every Repository Entry in configuration order, and `Current` only for an
-unconfigured launch repository. No custom selection JavaScript is added.
+then a Tabler `dropdown-divider`, then every Repository Entry sorted by
+Repository Name (case-insensitively, by `name.casefold()`), then a second
+divider and `Current` only for an unconfigured launch repository. Dividers
+appear only between non-empty groups. Sorting is menu-only; the Repository
+Collection keeps configuration order. No custom selection JavaScript is added.
 
 The `container-xl` board grid presents four columns on desktop, two columns at
 medium widths, and one column on narrow screens. Every state column has an

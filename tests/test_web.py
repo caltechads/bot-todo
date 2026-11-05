@@ -49,6 +49,9 @@ def write_collection(path: Path, *entries: RepositoryEntry) -> CollectionStore:
 class KanbanWebTests(TodoCliTestCase):
     """Exercise the Kanban Board through a real loopback HTTP server."""
 
+    #: Tabler separator between repository menu groups.
+    DIVIDER = '<div class="dropdown-divider"></div>'
+
     def setUp(self) -> None:
         """Create a repository and start an ephemeral Kanban server."""
         super().setUp()
@@ -176,6 +179,80 @@ class KanbanWebTests(TodoCliTestCase):
         self.assertIn("/?repo=alpha.one", body)
         self.assertIn("/?repo=beta", body)
         self.assertNotIn(">Current<", body)
+
+    def assert_menu_order(self, body: str, *markers: str) -> None:
+        """Assert the dropdown menu lists ``markers`` in order with exact dividers.
+
+        Args:
+            body: Rendered board page.
+            *markers: Expected substrings in menu order, including dividers.
+        """
+        start = body.index('<div class="dropdown-menu">')
+        menu = body[start : body.index("</div></div>", start)]
+        position = -1
+        for marker in markers:  # ValueError if missing or out of order
+            position = menu.index(marker, position + 1)
+        self.assertEqual(menu.count(self.DIVIDER), markers.count(self.DIVIDER))
+
+    def test_repository_menu_sorts_names_between_all_and_current(self) -> None:
+        """Catch the menu following configuration or path order, or losing dividers."""
+        parent = self.root.parent
+        app = KanbanWebApp(
+            self.store,
+            write_collection(
+                self.root / "config.toml",
+                RepositoryEntry("zeta", parent / "aaa"),
+                RepositoryEntry("alpha", parent / "zzz"),
+                RepositoryEntry("mid", parent / "mmm"),
+            ),
+            csrf_token="test-token",
+        )
+        launch = app.resolve_selection("", app.collections.load())
+        assert launch is not None
+        self.assertEqual(launch.key, "current")
+        self.assert_menu_order(
+            app.render_board(launch),
+            ">All<",
+            self.DIVIDER,
+            ">alpha<",
+            ">mid<",
+            ">zeta<",
+            self.DIVIDER,
+            ">Current<",
+        )
+
+    def test_repository_menu_without_current_has_one_divider(self) -> None:
+        """Catch a trailing divider in the ordinary configured-launch menu."""
+        app = KanbanWebApp(
+            self.store,
+            write_collection(
+                self.root / "config.toml",
+                RepositoryEntry("beta", self.root.parent / "aaa"),
+                RepositoryEntry("alpha", self.root),
+            ),
+            csrf_token="test-token",
+        )
+        launch = app.resolve_selection("", app.collections.load())
+        assert launch is not None
+        self.assertEqual(launch.key, "alpha")
+        body = app.render_board(launch)
+        self.assert_menu_order(body, ">All<", self.DIVIDER, ">alpha<", ">beta<")
+        self.assertNotIn(">Current<", body)
+
+    def test_repository_menu_omits_dividers_around_empty_groups(self) -> None:
+        """Catch a dangling, doubled, or misplaced divider when a group is empty."""
+        collections = write_collection(self.root / "config.toml")
+        app = KanbanWebApp(self.store, collections, csrf_token="test-token")
+        launch = app.resolve_selection("", app.collections.load())
+        assert launch is not None
+        self.assert_menu_order(
+            app.render_board(launch), ">All<", self.DIVIDER, ">Current<"
+        )
+        # Regression check only: already true before this change.
+        all_only = KanbanWebApp(None, collections, csrf_token="test-token")
+        launch = all_only.resolve_selection("", all_only.collections.load())
+        assert launch is not None
+        self.assert_menu_order(all_only.render_board(launch), ">All<")
 
     def test_unconfigured_launch_repository_adds_current(self) -> None:
         """Catch loss of an existing local/root web launch."""

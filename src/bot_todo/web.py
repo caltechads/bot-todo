@@ -1141,31 +1141,40 @@ class KanbanWebApp:
             selection: Currently displayed board selection.
 
         Returns:
-            Navbar dropdown markup listing All, configured entries, and Current.
+            Navbar dropdown markup listing All, configured entries sorted by
+            Repository Name, and Current, with dividers between non-empty
+            groups.
         """
         collection = selection.collection
-        items = [
-            (
-                "All",
-                self.selection_path(BoardSelection("all", None, None, collection)),
-            )
+        divider = '<div class="dropdown-divider"></div>'
+        groups = [
+            [
+                (
+                    "All",
+                    self.selection_path(BoardSelection("all", None, None, collection)),
+                )
+            ],
+            [
+                (
+                    entry.name,
+                    self.selection_path(
+                        BoardSelection(entry.name, entry.name, None, collection)
+                    ),
+                )
+                for entry in sorted(collection, key=lambda e: e.name.casefold())
+            ],
         ]
-        items.extend(
-            (
-                entry.name,
-                self.selection_path(
-                    BoardSelection(entry.name, entry.name, None, collection)
-                ),
-            )
-            for entry in collection
-        )
         launch = self.launch_selection(collection)
         if launch.key == "current":
-            items.append(("Current", self.selection_path(launch)))
-        options = "".join(
-            f'<a class="dropdown-item" href="{html.escape(path, quote=True)}">'
-            f"{html.escape(label)}</a>"
-            for label, path in items
+            groups.append([("Current", self.selection_path(launch))])
+        options = divider.join(
+            "".join(
+                f'<a class="dropdown-item" href="{html.escape(path, quote=True)}">'
+                f"{html.escape(label)}</a>"
+                for label, path in group
+            )
+            for group in groups
+            if group
         )
         label = html.escape(self._selection_label(selection))
         return (
